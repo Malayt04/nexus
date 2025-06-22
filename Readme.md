@@ -35,7 +35,7 @@ First, clone the project to your local machine:
 
 ```bash
 git clone <your-repository-url>
-cd assist
+cd nexus
 ```
 
 ### 2. Install Dependencies
