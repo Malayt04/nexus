@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles for a clean, modern look */
+body {
+  /* This is crucial for the see-through effect */
+  background-color: transparent;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar for chat */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.4);
+  border-radius: 20px;
+  border: transparent;
+}
+
+.draggable {
+  -webkit-app-region: drag;
+  cursor: grab;
+}
+
+.draggable:active {
+    cursor: grabbing;
+}
+
+.non-draggable {
+  -webkit-app-region: no-drag;
+}
