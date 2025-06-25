@@ -3,10 +3,11 @@ import LandingPage from './components/LandingPage';
 import SettingsPage from './components/SettingsPage';
 import ChatPage from './components/ChatPage';
 import SetupPage from './components/SetUp';
+import HistoryPage from './components/HistoryPage';
 
+export type Page = 'setup' | 'landing' | 'settings' | 'chat' | 'history' | 'home';
 
-export type Page = 'setup' | 'landing' | 'settings' | 'chat';
-
+// Update the global declaration to include the new history object
 declare global {
   interface Window {
     electronAPI: {
@@ -17,6 +18,14 @@ declare global {
       setSerpApiKey: (key: string) => Promise<void>;
       getUserDescription: () => Promise<string>;
       setUserDescription: (desc: string) => Promise<void>;
+      // Add the history API
+      history: {
+        getAllChats: () => Promise<any[]>;
+        getChatContent: (chatId: string) => Promise<{ messages: any[] } | null>;
+        saveChat: (data: { chatId: string | null, messagesToAppend: any[] }) => Promise<string>;
+        deleteChat: (chatId: string) => Promise<boolean>;
+        generateTitle: (chatId: string, history: any[]) => Promise<string | null>;
+      }
     }
   }
 }
@@ -26,35 +35,37 @@ function App() {
   const [apiKey, setApiKey] = useState<string>('');
   const [serpApiKey, setSerpApiKey] = useState<string>('');
   const [userDescription, setUserDescription] = useState<string>('');
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null); // To track active chat
 
   useEffect(() => {
     const initializeApp = async () => {
-      if (window.electronAPI) {
-        const [storedKey, storedDesc, storedSerpKey] = await Promise.all([
-            window.electronAPI.getApiKey(),
-            window.electronAPI.getUserDescription(),
-            window.electronAPI.getSerpApiKey(),
-        ]);
-        
-        if (storedKey) setApiKey(storedKey);
-        if (storedDesc) setUserDescription(storedDesc);
-        if (storedSerpKey) setSerpApiKey(storedSerpKey);
-
-        if (!storedDesc) {
-          setCurrentPage('setup');
-        } else if (!storedKey || !storedSerpKey) {
-          setCurrentPage('settings');
+        if (window.electronAPI) {
+          const [storedKey, storedDesc, storedSerpKey] = await Promise.all([
+              window.electronAPI.getApiKey(),
+              window.electronAPI.getUserDescription(),
+              window.electronAPI.getSerpApiKey(),
+          ]);
+          
+          if (storedKey) setApiKey(storedKey);
+          if (storedDesc) setUserDescription(storedDesc);
+          if (storedSerpKey) setSerpApiKey(storedSerpKey);
+  
+          if (!storedDesc) {
+            setCurrentPage('setup');
+          } else if (!storedKey || !storedSerpKey) {
+            setCurrentPage('settings');
+          } else {
+            setCurrentPage('landing');
+          }
         } else {
-          setCurrentPage('landing');
+          console.error("Fatal Error: window.electronAPI is not defined.");
         }
-      } else {
-        console.error("Fatal Error: window.electronAPI is not defined.");
-      }
-    };
-    initializeApp();
+      };
+      initializeApp();
   }, []);
 
-  const navigate = (page: Page) => {
+  const navigate = (page: Page, chatId: string | null = null) => {
+    setCurrentChatId(chatId); // Set the active chat ID when navigating
     setCurrentPage(page);
   };
   
@@ -69,20 +80,18 @@ function App() {
 
   const renderPage = () => {
     if (currentPage === null) {
-        return (
-            <div className="text-center">
-                <h2 className="text-xl font-semibold mb-4 text-yellow-400">Initializing...</h2>
-            </div>
-        );
+        return <div className="text-center"><h2 className="text-xl font-semibold mb-4 text-yellow-400">Initializing...</h2></div>;
     }
 
     switch (currentPage) {
       case 'setup':
         return <SetupPage onSetupComplete={handleSetupComplete} />;
       case 'settings':
-        return <SettingsPage navigate={navigate} setApiKey={setApiKey} setSerpApiKey={setSerpApiKey} />;
+        return <SettingsPage navigate={navigate} setApiKey={setApiKey} setSerpApiKey={setSerpApiKey} setUserDescription={setUserDescription} />;
       case 'chat':
-        return <ChatPage navigate={navigate} />;
+        return <ChatPage navigate={navigate} chatId={currentChatId} setChatId={setCurrentChatId} />;
+      case 'history':
+        return <HistoryPage navigate={navigate} />;
       case 'landing':
       default:
         return <LandingPage navigate={navigate} />;
@@ -90,7 +99,7 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen bg-gray-900/80 text-white backdrop-blur-xl flex flex-col items-center justify-center p-4 rounded-xl border border-white/10">
+    <div className="h-screen w-screen bg-black/80 text-gray-200 backdrop-blur-xl flex flex-col items-center justify-center p-4 rounded-xl border border-white/10">
       {renderPage()}
     </div>
   );
