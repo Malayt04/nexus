@@ -3,7 +3,7 @@
     "target": "ES2020",                // Compile to a modern version of JavaScript
     "module": "commonjs",             // Use CommonJS modules, standard for Node.js
     "outDir": "./dist",               // Where to put the compiled JavaScript files
-    "rootDir": "./src",               // Where our source TypeScript files are
+    "rootDir": "src",               // Where our source TypeScript files are
     "strict": true,                   // Enable all strict type-checking options
     "esModuleInterop": true,          // Helps with compatibility between module systems
     "skipLibCheck": true,             // Skip type checking of declaration files

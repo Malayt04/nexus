@@ -33,7 +33,6 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ text }) => {
             const codeText = String(children).replace(/\n$/, '');
 
             const handleCopy = () => {
-                // Use the older execCommand for better compatibility in Electron/webviews
                 const textArea = document.createElement('textarea');
                 textArea.value = codeText;
                 document.body.appendChild(textArea);
@@ -41,7 +40,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ text }) => {
                 try {
                     document.execCommand('copy');
                     setCopied(true);
-                    setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
+                    setTimeout(() => setCopied(false), 2000); 
                 } catch (err) {
                     console.error('Failed to copy text: ', err);
                 }

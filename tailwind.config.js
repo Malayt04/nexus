@@ -1,3 +1,5 @@
+const { blackA, gray, mauve, violet, slate } = require('@radix-ui/colors');
+
 module.exports = {
   content: [
     "./src/renderer/index.html",
@@ -5,6 +7,13 @@ module.exports = {
   ],
   theme: {
     extend: {
+      colors: {
+        ...blackA,
+        ...gray,
+        ...mauve,
+        ...violet,
+        ...slate
+      },
       animation: {
         'fade-in-up': 'fadeInUp 0.5s ease-out forwards',
       },

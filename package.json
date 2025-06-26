@@ -14,11 +14,11 @@
   "license": "ISC",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@radix-ui/colors": "^3.0.0",
     "@tailwindcss/typography": "^0.5.16",
-    "@types/pdf-parse": "^1.1.5",
     "@types/react-speech-recognition": "^3.9.6",
     "electron-store": "^10.1.0",
-    "pdf-parse": "^1.1.1",
+    "file-type": "^19.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-markdown": "^10.1.0",

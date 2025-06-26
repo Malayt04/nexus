@@ -7,18 +7,21 @@ import HistoryPage from './components/HistoryPage';
 
 export type Page = 'setup' | 'landing' | 'settings' | 'chat' | 'history' | 'home';
 
-// Update the global declaration to include the new history object
 declare global {
   interface Window {
     electronAPI: {
-      invokeAI: (prompt: string, includeScreenshot: boolean, history: any[]) => Promise<string>;
+      invokeAI: (
+        prompt: string,
+        includeScreenshot: boolean,
+        history: any[],
+        file?: { path: string }
+      ) => Promise<string>
       getApiKey: () => Promise<string>;
       setApiKey: (key: string) => Promise<void>;
       getSerpApiKey: () => Promise<string>;
       setSerpApiKey: (key: string) => Promise<void>;
       getUserDescription: () => Promise<string>;
       setUserDescription: (desc: string) => Promise<void>;
-      // Add the history API
       history: {
         getAllChats: () => Promise<any[]>;
         getChatContent: (chatId: string) => Promise<{ messages: any[] } | null>;
@@ -35,7 +38,7 @@ function App() {
   const [apiKey, setApiKey] = useState<string>('');
   const [serpApiKey, setSerpApiKey] = useState<string>('');
   const [userDescription, setUserDescription] = useState<string>('');
-  const [currentChatId, setCurrentChatId] = useState<string | null>(null); // To track active chat
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null); 
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -65,7 +68,7 @@ function App() {
   }, []);
 
   const navigate = (page: Page, chatId: string | null = null) => {
-    setCurrentChatId(chatId); // Set the active chat ID when navigating
+    setCurrentChatId(chatId); 
     setCurrentPage(page);
   };
   
@@ -99,7 +102,7 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen bg-black/80 text-gray-200 backdrop-blur-xl flex flex-col items-center justify-center p-4 rounded-xl border border-white/10">
+    <div className="h-screen w-screen text-gray-12 backdrop-blur-xl flex flex-col items-center justify-center p-4 rounded-xl border border-slate-6">
       {renderPage()}
     </div>
   );

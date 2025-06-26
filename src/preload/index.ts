@@ -1,8 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Existing functions
-  invokeAI: (prompt: string, includeScreenshot: boolean, history: any[]) => ipcRenderer.invoke('invoke-ai', prompt, includeScreenshot, history),
+  invokeAI: (prompt: string, includeScreenshot: boolean, history: any[], file?: { path: string }) =>
+    ipcRenderer.invoke('invoke-ai', prompt, includeScreenshot, history, file),
   getApiKey: () => ipcRenderer.invoke('get-api-key'),
   setApiKey: (key: string) => ipcRenderer.invoke('set-api-key', key),
   getSerpApiKey: () => ipcRenderer.invoke('get-serpapi-key'),
@@ -10,7 +10,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getUserDescription: () => ipcRenderer.invoke('get-user-description'),
   setUserDescription: (desc: string) => ipcRenderer.invoke('set-user-description', desc),
 
-  // --- NEW HISTORY FUNCTIONS ---
   history: {
     getAllChats: () => ipcRenderer.invoke('history:getAllChats'),
     getChatContent: (chatId: string) => ipcRenderer.invoke('history:getChatContent', chatId),

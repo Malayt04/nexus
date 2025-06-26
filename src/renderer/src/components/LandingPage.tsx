@@ -17,17 +17,14 @@ const ActionButton: React.FC<{ onClick: () => void; children: React.ReactNode; c
 const LandingPage: React.FC<LandingPageProps> = ({ navigate }) => {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center text-center p-4">
-        {/* Draggable Header */}
         <div className="draggable w-full h-8 flex-shrink-0" />
-
-        {/* Main Content */}
         <div className="flex-grow flex flex-col items-center justify-center animate-fade-in-up">
             <div className="relative mb-6">
-                <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full blur-lg opacity-75 animate-pulse-slow"></div>
-                <h1 className="relative text-7xl font-bold bg-gray-900 rounded-full p-4">🤖</h1>
+                <div className="absolute -inset-1 bg-gradient-to-r from-slate-8 to-slate-9 rounded-full blur-lg opacity-75 animate-pulse-slow"></div>
+                <h1 className="relative text-7xl font-bold bg-slate-3 rounded-full p-4">✨</h1>
             </div>
 
-            <h2 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-gray-200 to-gray-400 mb-3">
+            <h2 className="text-4xl font-bold text-gray-200 mb-3">
                 Nexus AI
             </h2>
             <p className="text-gray-400 max-w-sm mb-10">
@@ -43,20 +40,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ navigate }) => {
                 </ActionButton>
                  <ActionButton
                     onClick={() => navigate('history')}
-                    className="w-full bg-gray-700/80 hover:bg-gray-700/100 text-gray-200 border border-gray-600"
+                    className="w-full bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700"
                 >
                     View History
                 </ActionButton>
                  <ActionButton
                     onClick={() => navigate('settings')}
-                    className="w-full bg-transparent hover:bg-gray-800/50 text-gray-400"
+                    className="w-full bg-transparent hover:bg-gray-800 text-gray-400"
                 >
                     Settings
                 </ActionButton>
             </div>
         </div>
         
-        {/* Footer/Spacer */}
         <div className="h-8 flex-shrink-0" />
     </div>
   );

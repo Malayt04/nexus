@@ -2,16 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom styles for a clean, modern look */
 body {
-  /* This is crucial for the see-through effect */
-  background-color: transparent;
+  background-color: rgba(0, 0, 0, 0.5); 
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbar for chat */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
@@ -41,14 +38,12 @@ body {
   -webkit-app-region: no-drag;
 }
 
-/* Base styling for the auto-resizing textarea */
 .autoresize-textarea {
-    resize: none; /* Disables the user's ability to resize the textarea */
-    overflow: hidden; /* Hides the scrollbar until needed */
+    resize: none; 
+    overflow: hidden; 
 }
 
-/* Improve prose styles from @tailwindcss/typography */
 .prose-invert {
-    --tw-prose-pre-bg: #1f2937; /* A slightly lighter shade for code blocks */
-    --tw-prose-code: #e5e7eb;
+  --tw-prose-pre-bg: #282828; 
+  --tw-prose-code: #e5e7eb;
 }
