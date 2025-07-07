@@ -34,7 +34,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
   const silenceTimer = useRef<NodeJS.Timeout | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [streamingMessage, setStreamingMessage] = useState<Message | null>(null);
 
   const commands = [
     {
@@ -70,7 +69,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streamingMessage])
+  }, [messages])
 
   useEffect(() => {
     const loadChat = async () => {
@@ -90,54 +89,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
     loadChat()
   }, [chatId, setChatId])
 
-  useEffect(() => {
-    const removeChunkListener = window.electronAPI.onAIResponseChunk((chunk) => {
-      setStreamingMessage(prev => ({
-        sender: 'ai',
-        text: (prev?.text || '') + chunk,
-      }));
-    });
-
-    const removeEndListener = window.electronAPI.onAIResponseEnd(() => {
-      if (streamingMessage) {
-        setMessages(prev => [...prev, streamingMessage]);
-        setStreamingMessage(null);
-        
-        const isNewChat = !chatId;
-        window.electronAPI.history.saveChat({
-          chatId: chatId,
-          messagesToAppend: [messages[messages.length - 1], streamingMessage]
-        }).then(savedChatId => {
-          if (isNewChat && savedChatId) {
-            setChatId(savedChatId);
-            const historyForTitle = [...messages, streamingMessage].map(msg => ({
-              role: msg.sender === 'user' ? 'user' : 'model',
-              parts: [{ text: msg.text }]
-            }));
-            setTimeout(() => {
-              window.electronAPI.history.generateTitle(savedChatId, historyForTitle)
-            }, 1000);
-          }
-        });
-      }
-      setIsLoading(false);
-    });
-
-    const removeErrorListener = window.electronAPI.onAIResponseError((error) => {
-      console.error(error);
-      const errorMessage: Message = { sender: 'ai', text: 'Sorry, something went wrong.' };
-      setMessages((prev) => [...prev, errorMessage]);
-      setStreamingMessage(null);
-      setIsLoading(false);
-    });
-
-    return () => {
-      removeChunkListener();
-      removeEndListener();
-      removeErrorListener();
-    };
-  }, [streamingMessage, messages, chatId]);
-
   const handleSubmit = async (e?: FormEvent) => {
     if (e) e.preventDefault()
     const finalInput = input.trim()
@@ -154,7 +105,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
     resetTranscript()
     setAttachedFile(null)
     setIsLoading(true)
-    setStreamingMessage({ sender: 'ai', text: '' });
 
     const shouldIncludeScreenshot = includeScreenshot || visionTriggered
     if (visionTriggered) setVisionTriggered(false)
@@ -166,19 +116,36 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
         parts: [{ text: msg.text }]
       }))
 
-      await window.electronAPI.invokeAI(
+      const aiResponse = await window.electronAPI.invokeAI(
         finalInput,
         shouldIncludeScreenshot,
         aiHistory.slice(0, -1),
         attachedFile || undefined
       )
+      const aiMessage: Message = { sender: 'ai', text: aiResponse }
+
+      const isNewChat = !chatId
+
+      const savedChatId = await window.electronAPI.history.saveChat({
+        chatId: chatId,
+        messagesToAppend: [userMessage, aiMessage]
+      })
+
+      if (isNewChat && savedChatId) {
+        setChatId(savedChatId)
+        const historyForTitle = [...aiHistory, { role: 'model', parts: [{ text: aiMessage.text }] }]
+        setTimeout(() => {
+          window.electronAPI.history.generateTitle(savedChatId, historyForTitle as any)
+        }, 1000)
+      }
+
+      setMessages((prev) => [...prev, aiMessage])
     } catch (error) {
       console.error(error)
       const errorMessage: Message = { sender: 'ai', text: 'Sorry, something went wrong.' }
       setMessages((prev) => [...prev, errorMessage])
-      setStreamingMessage(null);
-      setIsLoading(false)
     } finally {
+      setIsLoading(false)
       if (isAudioMode) {
         resetTranscript()
         SpeechRecognition.startListening({ continuous: true })
@@ -254,9 +221,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
         {messages.map((msg, index) => (
           <MessageBubble key={index} message={msg} />
         ))}
-        {streamingMessage && <MessageBubble message={streamingMessage} />}
 
-        {isLoading && !streamingMessage &&(
+        {isLoading && (
           <div className="mb-4 animate-fade-in-up flex items-start">
             <div
               className={`bg-gray-800 inline-flex items-center p-4 rounded-3xl rounded-bl-lg mt-1`}

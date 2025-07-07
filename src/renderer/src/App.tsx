@@ -15,10 +15,7 @@ declare global {
         includeScreenshot: boolean,
         history: any[],
         file?: { path: string }
-      ) => Promise<void>
-      onAIResponseChunk: (callback: (chunk: string) => void) => () => void;
-      onAIResponseEnd: (callback: () => void) => () => void;
-      onAIResponseError: (callback: (error: string) => void) => () => void;
+      ) => Promise<string>
       getApiKey: () => Promise<string>;
       setApiKey: (key: string) => Promise<void>;
       getSerpApiKey: () => Promise<string>;
