@@ -160,7 +160,7 @@ ipcMain.handle(
         }
       ]
 
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash", systemInstruction, tools })
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash", systemInstruction, tools })
       const chat = model.startChat({ history })
 
       const promptParts: Part[] = [{ text: prompt }]
@@ -335,7 +335,7 @@ ipcMain.handle('history:generateTitle', async (_, chatId: string, history: Conte
 
     try {
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         const conversationForPrompt = history.slice(0, 4).map(h => `${h.role}: ${h.parts[0].text}`).join('\n');
         const titlePrompt = `Based on the following conversation, create a very short, concise title (5 words or less). Do not use quotation marks.\n\nConversation:\n${conversationForPrompt}`;
