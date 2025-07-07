@@ -170,10 +170,13 @@ ipcMain.handle(
           types: ['screen'],
           thumbnailSize: { width: 1920, height: 1080 }
         })
+
+        const imageBuffer = sources[0].thumbnail.toPNG();
+
         promptParts.unshift({
           inlineData: {
-            mimeType: 'image/png',
-            data: sources[0].thumbnail.toDataURL().split(',')[1]
+              mimeType: 'image/png',
+              data: imageBuffer.toString('base64')
           }
         })
       }

@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import LandingPage from './components/LandingPage';
-import SettingsPage from './components/SettingsPage';
-import ChatPage from './components/ChatPage';
-import SetupPage from './components/SetUp';
-import HistoryPage from './components/HistoryPage';
+import React, { useState, useEffect, Suspense } from 'react';
+const LandingPage = React.lazy(() => import('./components/LandingPage'));
+const SettingsPage = React.lazy(() => import('./components/SettingsPage'));
+const ChatPage = React.lazy(() => import('./components/ChatPage'));
+const SetupPage = React.lazy(() => import('./components/SetUp'));
+const HistoryPage = React.lazy(() => import('./components/HistoryPage'));
 
 export type Page = 'setup' | 'landing' | 'settings' | 'chat' | 'history' | 'home';
 
@@ -103,7 +103,9 @@ function App() {
 
   return (
     <div className="h-screen w-screen text-gray-12 backdrop-blur-xl flex flex-col items-center justify-center p-4 rounded-xl border border-slate-6">
+      <Suspense fallback={<div className="text-xl font-semibold text-yellow-400">Loading...</div>}>
       {renderPage()}
+      </Suspense>
     </div>
   );
 }
