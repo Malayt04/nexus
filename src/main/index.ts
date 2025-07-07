@@ -79,8 +79,8 @@ function createWindow() {
       preload: preloadScriptPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
-    }
+      sandbox: false,
+    },
   })
 
   if (process.platform === 'darwin') {
@@ -119,7 +119,7 @@ function createWindow() {
 ipcMain.handle(
   'invoke-ai',
   async (
-    _,
+    event,
     prompt: string,
     includeScreenshot: boolean,
     history: Content[],
@@ -160,7 +160,7 @@ ipcMain.handle(
         }
       ]
 
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash", systemInstruction, tools })
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash", systemInstruction, tools })
       const chat = model.startChat({ history })
 
       const promptParts: Part[] = [{ text: prompt }]
@@ -194,52 +194,17 @@ ipcMain.handle(
         }
       }
 
-      let result = await chat.sendMessage(promptParts)
-      let response = result.response
+      const result = await chat.sendMessageStream(promptParts)
 
-      let functionCalls = response.functionCalls()
-      while (functionCalls && functionCalls.length > 0) {
-        const call = functionCalls[0]
-        const toolResponse: Part = { functionResponse: { name: call.name, response: {} } }
-
-        console.log(`[AI Tool Call] Name: ${call.name}, Args:`, call.args)
-
-        switch (call.name) {
-          case 'execute_terminal_command':
-            const commandResult = await new Promise<{ stdout: string; stderr: string }>((resolve) =>
-              exec(call.args.command, { cwd: app.getPath('desktop') }, (err, stdout, stderr) =>
-                resolve({ stdout, stderr: err ? stderr : '' })
-              )
-            )
-            toolResponse.functionResponse.response = commandResult
-            break
-          case 'web_search':
-            const searchResults = await getJson({
-              engine: 'google',
-              q: call.args.query,
-              api_key: serpApiKey
-            })
-            toolResponse.functionResponse.response = {
-              results:
-                searchResults['organic_results']
-                  ?.map((r: any) => ({ title: r.title, link: r.link, snippet: r.snippet }))
-                  .slice(0, 5) || [],
-              answer_box: searchResults['answer_box'] || null
-            }
-            break
-          default:
-            toolResponse.functionResponse.response = { error: `Unknown tool called: ${call.name}` }
-        }
-
-        result = await chat.sendMessage([toolResponse])
-        response = await result.response
-        functionCalls = response.functionCalls()
+      for await (const chunk of result.stream) {
+        const chunkText = chunk.text()
+        event.sender.send('ai-response-chunk', chunkText)
       }
 
-      return response.text()
+      event.sender.send('ai-response-end')
     } catch (error) {
       console.error('Error invoking Gemini API:', error)
-      return `Error: ${(error as Error).message}`
+      event.sender.send('ai-response-error', `Error: ${(error as Error).message}`)
     }
   }
 )
@@ -335,7 +300,7 @@ ipcMain.handle('history:generateTitle', async (_, chatId: string, history: Conte
 
     try {
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
         const conversationForPrompt = history.slice(0, 4).map(h => `${h.role}: ${h.parts[0].text}`).join('\n');
         const titlePrompt = `Based on the following conversation, create a very short, concise title (5 words or less). Do not use quotation marks.\n\nConversation:\n${conversationForPrompt}`;
