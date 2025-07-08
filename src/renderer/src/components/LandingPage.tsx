@@ -39,6 +39,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ navigate }) => {
                     Start New Chat
                 </ActionButton>
                  <ActionButton
+                    onClick={() => navigate('meeting')}
+                    className="w-full bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/30"
+                >
+                    Meeting Assistant
+                </ActionButton>
+                 <ActionButton
                     onClick={() => navigate('history')}
                     className="w-full bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700"
                 >

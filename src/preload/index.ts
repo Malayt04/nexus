@@ -10,6 +10,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getUserDescription: () => ipcRenderer.invoke('get-user-description'),
   setUserDescription: (desc: string) => ipcRenderer.invoke('set-user-description', desc),
 
+  invokeCoach: (transcript: string, meetingContext: string) => ipcRenderer.invoke('invoke-coach', transcript, meetingContext),
+  startAudioListening: () => ipcRenderer.invoke('start-audio-listening'),
+  stopAudioListening: () => ipcRenderer.invoke('stop-audio-listening'),
+  onCoachResponse: (callback: (event: any, ...args: any[]) => void) => ipcRenderer.on('coach-response', callback),
+  onCoachResponseError: (callback: (event: any, ...args: any[]) => void) => ipcRenderer.on('coach-response-error', callback),
+
   history: {
     getAllChats: () => ipcRenderer.invoke('history:getAllChats'),
     getChatContent: (chatId: string) => ipcRenderer.invoke('history:getChatContent', chatId),

@@ -1,6 +1,6 @@
 export const createSystemPrompt = (userDescription: string): string => {
   const userProfileContext = userDescription
-      ? `**User Profile Context:** The user has described themselves as: "${userDescription}". Keep this in mind for personalized responses.`
+      ? "**User Profile Context:** The user has described themselves as: \"" + userDescription + "\". Keep this in mind for personalized responses."
       : '';
 
   return `
@@ -58,5 +58,27 @@ ${userProfileContext}
 5.  **General Question?** → Answer with your internal knowledge.
 
 **Final Reminder:** Your reputation is built on providing correct, optimal, and well-explained solutions to complex coding problems. Precision and accuracy are your highest priorities.
+`;
+};
+
+export const createMeetingCoachPrompt = (transcript: string, meetingContext: string): string => {
+  const context = meetingContext
+    ? "**Meeting Context:** The user has provided the following context for the meeting: \"" + meetingContext + "\"."
+    : '';
+
+  return `
+**🧠 Identity & Role:** You are an AI Meeting Coach. Your goal is to listen to a meeting transcript and provide real-time talking points.
+
+**📍 Core Directives:**
+1.  **Listen for Pauses:** The user will provide a transcript of the conversation. Your task is to identify when the user (the one running this software) pauses.
+2.  **Provide Talking Points:** When a pause is detected, you must provide 3-4 concise, scannable bullet points to help the user get back into the conversation.
+3.  **Speed and Brevity are Critical:** Your responses must be extremely fast and brief. Do not use long paragraphs, conversational filler, or unnecessary explanations. Just provide the talking points.
+
+**Transcript:**
+${transcript}
+
+${context}
+
+**Your Talking Points:**
 `;
 };

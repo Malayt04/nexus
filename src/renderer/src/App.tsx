@@ -4,8 +4,9 @@ const SettingsPage = React.lazy(() => import('./components/SettingsPage'));
 const ChatPage = React.lazy(() => import('./components/ChatPage'));
 const SetupPage = React.lazy(() => import('./components/SetUp'));
 const HistoryPage = React.lazy(() => import('./components/HistoryPage'));
+const MeetingAssistantPage = React.lazy(() => import('./components/MeetingAssistantPage'));
 
-export type Page = 'setup' | 'landing' | 'settings' | 'chat' | 'history' | 'home';
+export type Page = 'setup' | 'landing' | 'settings' | 'chat' | 'history' | 'home' | 'meeting';
 
 declare global {
   interface Window {
@@ -22,6 +23,11 @@ declare global {
       setSerpApiKey: (key: string) => Promise<void>;
       getUserDescription: () => Promise<string>;
       setUserDescription: (desc: string) => Promise<void>;
+      invokeCoach: (transcript: string, meetingContext: string) => Promise<void>;
+      startAudioListening: () => Promise<void>;
+      stopAudioListening: () => Promise<void>;
+      onCoachResponse: (callback: (event: any, ...args: any[]) => void) => void;
+      onCoachResponseError: (callback: (event: any, ...args: any[]) => void) => void;
       history: {
         getAllChats: () => Promise<any[]>;
         getChatContent: (chatId: string) => Promise<{ messages: any[] } | null>;
@@ -95,6 +101,8 @@ function App() {
         return <ChatPage navigate={navigate} chatId={currentChatId} setChatId={setCurrentChatId} />;
       case 'history':
         return <HistoryPage navigate={navigate} />;
+      case 'meeting':
+        return <MeetingAssistantPage />;
       case 'landing':
       default:
         return <LandingPage navigate={navigate} />;

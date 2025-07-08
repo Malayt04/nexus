@@ -3,9 +3,10 @@ import * as path from 'path'
 import * as fs from 'fs/promises'
 import { exec } from 'child_process'
 import { Content, GoogleGenerativeAI, Part, SchemaType, Tool } from '@google/generative-ai'
-import { createSystemPrompt } from './prompt'
+import { createSystemPrompt, createMeetingCoachPrompt } from './prompt'
 import { getJson } from 'serpapi'
 import crypto from 'crypto'
+import vad from '@ricky0123/vad-web'
 
 
 const configFileName = 'config.json'
@@ -252,6 +253,50 @@ ipcMain.handle('get-serpapi-key', () => readStore().serpApiKey)
 ipcMain.handle('set-serpapi-key', (_, key: string) => writeToStore('serpApiKey', key))
 
 
+let vadInstance: any;
+
+ipcMain.handle('invoke-coach', async (_, transcript: string, meetingContext: string) => {
+  const { apiKey } = readStore();
+  if (!apiKey) {
+    return 'API Key not set. Please set it in Settings.';
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const prompt = createMeetingCoachPrompt(transcript, meetingContext);
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    BrowserWindow.getAllWindows()[0].webContents.send('coach-response', text);
+  } catch (error) {
+    console.error('Error invoking Gemini API for coach:', error);
+    BrowserWindow.getAllWindows()[0].webContents.send('coach-response-error', (error as Error).message);
+  }
+});
+
+ipcMain.handle('start-audio-listening', async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { mandatory: { chromeMediaSource: 'desktop' } } as any });
+    vadInstance = await vad.MicVAD.new({
+      stream,
+      onSpeechEnd: (audio) => {
+        const transcript = '[...]'; // Placeholder for actual transcript
+        ipcMain.emit('invoke-coach', transcript, '');
+      },
+    });
+    vadInstance.start();
+  } catch (error) {
+    console.error('Error starting audio listening:', error);
+  }
+});
+
+ipcMain.handle('stop-audio-listening', () => {
+  if (vadInstance) {
+    vadInstance.destroy();
+    vadInstance = null;
+  }
+});
 
 
 ipcMain.handle('history:getAllChats', async () => {
