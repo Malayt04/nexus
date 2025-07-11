@@ -31,13 +31,11 @@ const HistoryPage: React.FC<HistoryPageProps> = ({ navigate }) => {
 
   const handleDelete = async (e: React.MouseEvent, chatId: string) => {
     e.stopPropagation(); 
-    if (confirm('Are you sure you want to delete this chat?')) {
-        const success = await window.electronAPI.history.deleteChat(chatId);
-        if (success) {
-            setChats(chats.filter(chat => chat.id !== chatId));
-        } else {
-            alert('Failed to delete chat.');
-        }
+    const success = await window.electronAPI.history.deleteChat(chatId);
+    if (success) {
+        setChats(chats.filter(chat => chat.id !== chatId));
+    } else {
+        alert('Failed to delete chat.');
     }
   };
 

@@ -1,4 +1,4 @@
-import React, { useState, FormEvent, useRef, useEffect } from 'react'
+import React, { useState, FormEvent, useRef, useEffect, useMemo, useCallback } from 'react'
 import 'regenerator-runtime/runtime'
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition'
 import { Page } from '../App'
@@ -35,14 +35,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const commands = [
+  // Memoize speech recognition commands to prevent unnecessary re-renders
+  const commands = useMemo(() => [
     {
       command: ['read my screen', 'look at this', "what's on my screen", 'analyze this screen'],
       callback: () => setVisionTriggered(true),
       isFuzzyMatch: true,
       fuzzyMatchingThreshold: 0.8
     }
-  ]
+  ], [])
+  
   const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } =
     useSpeechRecognition({ commands })
 
@@ -89,7 +91,39 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
     loadChat()
   }, [chatId, setChatId])
 
-  const handleSubmit = async (e?: FormEvent) => {
+  // Handle focus input event from main process
+  useEffect(() => {
+    const handleFocusInput = () => {
+      if (textareaRef.current) {
+        textareaRef.current.focus()
+      }
+    }
+    
+    window.electronAPI.onFocusInput(handleFocusInput)
+    
+    return () => {
+      // Cleanup if needed
+    }
+  }, [])
+
+  // Handle screenshot toggle shortcut from main process
+  useEffect(() => {
+    const handleToggleScreenshot = () => {
+      setIncludeScreenshot(prev => !prev)
+      // Focus on the input if screenshot is enabled
+      if (textareaRef.current) {
+        textareaRef.current.focus()
+      }
+    }
+    
+    window.electronAPI.onToggleScreenshot(handleToggleScreenshot)
+    
+    return () => {
+      // Cleanup if needed
+    }
+  }, [])
+
+  const handleSubmit = useCallback(async (e?: FormEvent) => {
     if (e) e.preventDefault()
     const finalInput = input.trim()
     if ((!finalInput && !attachedFile) || isLoading) return
@@ -100,49 +134,75 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
       text: finalInput,
       file: attachedFile || undefined
     }
+    
+    // Immediate UI updates for better perceived performance
     setMessages((prev) => [...prev, userMessage])
     setInput('')
     resetTranscript()
+    const currentAttachedFile = attachedFile
     setAttachedFile(null)
     setIsLoading(true)
+    
+    // Reset states immediately
+    if (includeScreenshot) setIncludeScreenshot(false)
 
     const shouldIncludeScreenshot = includeScreenshot || visionTriggered
     if (visionTriggered) setVisionTriggered(false)
 
     try {
+      // Prepare history more efficiently - limit to last 4 messages (2 exchanges)
       const currentHistory = [...messages, userMessage]
-      const aiHistory: GeminiHistoryEntry[] = currentHistory.map((msg) => ({
-        role: msg.sender === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.text }]
-      }))
+      const aiHistory: GeminiHistoryEntry[] = currentHistory
+        .slice(-4) // Reduced to last 4 messages for faster processing
+        .map((msg) => ({
+          role: msg.sender === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.text.slice(0, 1000) }] // Trim long messages
+        }))
 
-      const aiResponse = await window.electronAPI.invokeAI(
+      // Start AI call and chat saving in parallel
+      const aiPromise = window.electronAPI.invokeAI(
         finalInput,
         shouldIncludeScreenshot,
         aiHistory.slice(0, -1),
-        attachedFile || undefined
+        currentAttachedFile || undefined
       )
-      const aiMessage: Message = { sender: 'ai', text: aiResponse }
-
-      const isNewChat = !chatId
-
-      const savedChatId = await window.electronAPI.history.saveChat({
-        chatId: chatId,
-        messagesToAppend: [userMessage, aiMessage]
-      })
-
-      if (isNewChat && savedChatId) {
-        setChatId(savedChatId)
-        const historyForTitle = [...aiHistory, { role: 'model', parts: [{ text: aiMessage.text }] }]
-        setTimeout(() => {
-          window.electronAPI.history.generateTitle(savedChatId, historyForTitle as any)
-        }, 1000)
+      
+      const aiResponse = await aiPromise
+      
+      // Check if response is actually an error
+      if (aiResponse.startsWith('Error:')) {
+        throw new Error(aiResponse.substring(6)) // Remove 'Error: ' prefix
       }
-
+      
+      const aiMessage: Message = { sender: 'ai', text: aiResponse }
+      
+      // Update messages immediately
       setMessages((prev) => [...prev, aiMessage])
+      
+      // Handle chat saving asynchronously without blocking UI
+      const isNewChat = !chatId
+      setTimeout(() => {
+        window.electronAPI.history.saveChat({
+          chatId: chatId,
+          messagesToAppend: [userMessage, aiMessage]
+        }).then(savedChatId => {
+          if (isNewChat && savedChatId) {
+            setChatId(savedChatId)
+            // Generate title asynchronously with minimal history
+            const titleHistory = aiHistory.slice(-2).concat([{ role: 'model', parts: [{ text: aiMessage.text.slice(0, 200) }] }])
+            window.electronAPI.history.generateTitle(savedChatId, titleHistory as any)
+          }
+        }).catch(error => console.error('Chat saving failed:', error))
+      }, 0)
+      
     } catch (error) {
       console.error(error)
-      const errorMessage: Message = { sender: 'ai', text: 'Sorry, something went wrong.' }
+      const errorMessage: Message = { 
+        sender: 'ai', 
+        text: error instanceof Error && error.message.includes('timeout') 
+          ? 'Request timed out. Please try again with a smaller image or simpler query.'
+          : 'Sorry, something went wrong. Please try again.'
+      }
       setMessages((prev) => [...prev, errorMessage])
     } finally {
       setIsLoading(false)
@@ -151,16 +211,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
         SpeechRecognition.startListening({ continuous: true })
       }
     }
-  }
+  }, [input, attachedFile, isLoading, includeScreenshot, visionTriggered, messages, chatId, isAudioMode, resetTranscript, setChatId])
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSubmit()
     }
-  }
+  }, [handleSubmit])
 
-  const toggleAudioMode = () => {
+  const toggleAudioMode = useCallback(() => {
     const nextAudioModeState = !isAudioMode
     setIsAudioMode(nextAudioModeState)
     if (nextAudioModeState) {
@@ -171,16 +231,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
       SpeechRecognition.stopListening()
       if (silenceTimer.current) clearTimeout(silenceTimer.current)
     }
-  }
+  }, [isAudioMode, resetTranscript])
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      setAttachedFile({ name: file.name, path: file.path })
+      setAttachedFile({ name: file.name, path: (file as any).path })
     }
-  }
+  }, [])
 
-  const startNewChat = () => {
+  const startNewChat = useCallback(() => {
     setIsAudioMode(false)
     SpeechRecognition.stopListening()
     setChatId(null)
@@ -189,7 +249,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
     resetTranscript()
     setIncludeScreenshot(false)
     setAttachedFile(null)
-  }
+  }, [resetTranscript, setChatId])
 
   if (!browserSupportsSpeechRecognition) {
     return (

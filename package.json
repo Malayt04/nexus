@@ -42,5 +42,34 @@
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3"
+  },
+  "build": {
+    "appId": "com.nexus.ai",
+    "productName": "Nexus AI",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "node_modules/**/*",
+      "resources/**/*"
+    ],
+    "win": {
+      "icon": "resources/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "mac": {
+      "icon": "resources/icon.icns",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "icon": "resources/icon.png",
+      "category": "Office"
+    }
   }
 }

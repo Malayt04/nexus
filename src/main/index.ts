@@ -3,7 +3,7 @@ import * as path from 'path'
 import * as fs from 'fs/promises'
 import { exec } from 'child_process'
 import { Content, GoogleGenerativeAI, Part, SchemaType, Tool } from '@google/generative-ai'
-import { createSystemPrompt, createMeetingCoachPrompt } from './prompt'
+import {createMeetingCoachPrompt, createSystemPrompt } from './prompt'
 import { getJson } from 'serpapi'
 import crypto from 'crypto'
 import vad from '@ricky0123/vad-web'
@@ -63,6 +63,9 @@ async function readManifest() {
   }
 }
 
+// Track overlay interaction state
+let isOverlayInteractive = false
+
 function createWindow() {
   const preloadScriptPath = path.join(__dirname, '../preload/index.js')
 
@@ -76,6 +79,7 @@ function createWindow() {
     hasShadow: false,
     resizable: false,
     vibrancy: 'under-window',
+    icon: path.join(__dirname, '../../resources/nexus-icon.png'), // Add your icon here
     webPreferences: {
       preload: preloadScriptPath,
       contextIsolation: true,
@@ -83,6 +87,9 @@ function createWindow() {
       sandbox: false
     }
   })
+
+  // Set initial state to pass-through (non-interactive)
+  mainWindow.setIgnoreMouseEvents(true, { forward: true })
 
   if (process.platform === 'darwin') {
     mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
@@ -108,6 +115,19 @@ function createWindow() {
     const currentPosition = mainWindow.getPosition()
     mainWindow.setPosition(currentPosition[0] + x, currentPosition[1] + y)
   }
+  
+  // Function to toggle overlay interaction mode
+  const toggleOverlayInteraction = () => {
+    isOverlayInteractive = !isOverlayInteractive
+    mainWindow.setIgnoreMouseEvents(!isOverlayInteractive, { forward: true })
+    
+    // Send state to renderer for UI feedback
+    mainWindow.webContents.send('overlay-state-changed', isOverlayInteractive)
+    
+    console.log(`Overlay is now ${isOverlayInteractive ? 'interactive' : 'pass-through'}`)
+  }
+  
+  // Register keyboard shortcuts
   globalShortcut.register('CommandOrControl+Right', () => moveWindow(50, 0))
   globalShortcut.register('CommandOrControl+Left', () => moveWindow(-50, 0))
   globalShortcut.register('CommandOrControl+Up', () => moveWindow(0, -50))
@@ -115,6 +135,36 @@ function createWindow() {
   globalShortcut.register(`CommandOrControl+H`, () =>
     mainWindow.isAlwaysOnTop() ? mainWindow.setAlwaysOnTop(false) : mainWindow.setAlwaysOnTop(true)
   )
+  
+  // Main toggle shortcut - Ctrl+Enter to toggle interaction mode
+  globalShortcut.register('CommandOrControl+Return', toggleOverlayInteraction)
+  
+  // Alternative shortcuts for different functions
+  globalShortcut.register('CommandOrControl+Shift+Return', () => {
+    // Force interactive mode and focus input
+    isOverlayInteractive = true
+    mainWindow.setIgnoreMouseEvents(false)
+    mainWindow.webContents.send('overlay-state-changed', isOverlayInteractive)
+    mainWindow.webContents.send('focus-input')
+    console.log('Overlay activated and input focused')
+  })
+  
+  globalShortcut.register('CommandOrControl+Escape', () => {
+    // Force pass-through mode
+    isOverlayInteractive = false
+    mainWindow.setIgnoreMouseEvents(true, { forward: true })
+    mainWindow.webContents.send('overlay-state-changed', isOverlayInteractive)
+    console.log('Overlay set to pass-through mode')
+  })
+  
+  // Screenshot toggle shortcut - Ctrl+S to toggle screenshot mode
+  globalShortcut.register('CommandOrControl+S', () => {
+    // Only send if the window is focused and interactive
+    if (mainWindow.isFocused() || isOverlayInteractive) {
+      mainWindow.webContents.send('toggle-screenshot')
+      console.log('Screenshot mode toggled')
+    }
+  })
 }
 
 ipcMain.handle(
@@ -130,10 +180,36 @@ ipcMain.handle(
     if (!apiKey || !serpApiKey) return 'API Keys not set. Please set them in Settings.'
 
     try {
+      // Limit history to last 6 messages (3 exchanges) for faster processing
+      let limitedHistory = history.slice(-6)
+      
+      // Ensure history starts with 'user' role and alternates properly for Gemini API compatibility
+      if (limitedHistory.length > 0) {
+        // Remove any leading 'model' messages
+        while (limitedHistory.length > 0 && limitedHistory[0].role === 'model') {
+          limitedHistory = limitedHistory.slice(1)
+        }
+        
+        // Ensure alternating pattern: user -> model -> user -> model
+        const validHistory: Content[] = []
+        let expectedRole: 'user' | 'model' = 'user'
+        
+        for (const message of limitedHistory) {
+          if (message.role === expectedRole) {
+            validHistory.push(message)
+            expectedRole = expectedRole === 'user' ? 'model' : 'user'
+          }
+        }
+        
+        limitedHistory = validHistory
+      }
+      
       const genAI = new GoogleGenerativeAI(apiKey)
+      const systemPrompt = createSystemPrompt(userDescription as string)
+      
       const systemInstruction = {
         role: 'system',
-        parts: [{ text: createSystemPrompt(userDescription as string) }]
+        parts: [{ text: systemPrompt }]
       }
 
       const tools: Tool[] = [
@@ -162,79 +238,115 @@ ipcMain.handle(
       ]
 
       const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash", systemInstruction, tools })
-      const chat = model.startChat({ history })
+      const chat = model.startChat({ history: limitedHistory })
 
       const promptParts: Part[] = [{ text: prompt }]
 
+      // Parallel processing for media attachments
+      const mediaPromises: Promise<any>[] = []
+      
       if (includeScreenshot) {
-        const sources = await desktopCapturer.getSources({
-          types: ['screen'],
-          thumbnailSize: { width: 1920, height: 1080 }
-        })
-
-        const imageBuffer = sources[0].thumbnail.toPNG();
-
-        promptParts.unshift({
-          inlineData: {
-              mimeType: 'image/png',
-              data: imageBuffer.toString('base64')
-          }
-        })
-      }
-      if (file) {
-        const fileBuffer = await fs.readFile(file.path)
-        const fileTypeModule = await eval("import('file-type')")
-        const fileType = await fileTypeModule.fileTypeFromBuffer(fileBuffer)
-        if (fileType) {
-          promptParts.unshift({
-            inlineData: {
-              mimeType: fileType.mime,
-              data: fileBuffer.toString('base64')
+        mediaPromises.push(
+          desktopCapturer.getSources({
+            types: ['screen'],
+            thumbnailSize: { width: 1280, height: 720 } // Reduced resolution for faster processing
+          }).then(sources => {
+            const imageBuffer = sources[0].thumbnail.toPNG()
+            return {
+              inlineData: {
+                mimeType: 'image/png',
+                data: imageBuffer.toString('base64')
+              }
             }
           })
-        }
+        )
       }
+      
+      if (file) {
+        mediaPromises.push(
+          Promise.all([
+            fs.readFile(file.path),
+            eval("import('file-type')")
+          ]).then(async ([fileBuffer, fileTypeModule]) => {
+            const fileType = await fileTypeModule.fileTypeFromBuffer(fileBuffer)
+            if (fileType) {
+              return {
+                inlineData: {
+                  mimeType: fileType.mime,
+                  data: fileBuffer.toString('base64')
+                }
+              }
+            }
+            return null
+          })
+        )
+      }
+
+      // Wait for all media processing to complete
+      const mediaResults = await Promise.all(mediaPromises)
+      mediaResults.forEach(result => {
+        if (result) promptParts.unshift(result)
+      })
 
       let result = await chat.sendMessage(promptParts)
       let response = result.response
 
+      // Handle function calls with timeout to prevent hanging
       let functionCalls = response.functionCalls()
-      while (functionCalls && functionCalls.length > 0) {
+      let callCount = 0
+      const maxCalls = 3 // Limit function calls to prevent infinite loops
+      
+      while (functionCalls && functionCalls.length > 0 && callCount < maxCalls) {
         const call = functionCalls[0]
         const toolResponse: Part = { functionResponse: { name: call.name, response: {} } }
 
         console.log(`[AI Tool Call] Name: ${call.name}, Args:`, call.args)
 
-        switch (call.name) {
-          case 'execute_terminal_command':
-            const commandResult = await new Promise<{ stdout: string; stderr: string }>((resolve) =>
-              exec(call.args.command as string, { cwd: app.getPath('desktop') }, (err, stdout, stderr) =>
-                resolve({ stdout, stderr: err ? stderr : '' })
-              )
-            )
-            toolResponse.functionResponse.response = commandResult
-            break
-          case 'web_search':
-            const searchResults = await getJson({
-              engine: 'google',
-              q: call.args.query as string,
-              api_key: serpApiKey
-            })
-            toolResponse.functionResponse.response = {
-              results:
-                searchResults['organic_results']
-                  ?.map((r: any) => ({ title: r.title, link: r.link, snippet: r.snippet }))
-                  .slice(0, 5) || [],
-              answer_box: searchResults['answer_box'] || null
-            }
-            break
-          default:
-            toolResponse.functionResponse.response = { error: `Unknown tool called: ${call.name}` }
+        try {
+          switch (call.name) {
+            case 'execute_terminal_command':
+              const commandResult = await Promise.race([
+                new Promise<{ stdout: string; stderr: string }>((resolve) =>
+                  exec(call.args.command as string, { cwd: app.getPath('desktop'), timeout: 10000 }, (err, stdout, stderr) =>
+                    resolve({ stdout, stderr: err ? stderr : '' })
+                  )
+                ),
+                new Promise<{ stdout: string; stderr: string }>((_, reject) => 
+                  setTimeout(() => reject(new Error('Command timeout')), 10000)
+                )
+              ])
+              toolResponse.functionResponse.response = commandResult
+              break
+            case 'web_search':
+              const searchResults = await Promise.race([
+                getJson({
+                  engine: 'google',
+                  q: call.args.query as string,
+                  api_key: serpApiKey
+                }),
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Search timeout')), 8000)
+                )
+              ])
+              toolResponse.functionResponse.response = {
+                results:
+                  searchResults['organic_results']
+                    ?.map((r: any) => ({ title: r.title, link: r.link, snippet: r.snippet }))
+                    .slice(0, 3) || [], // Reduced to 3 results for faster processing
+                answer_box: searchResults['answer_box'] || null
+              }
+              break
+            default:
+              toolResponse.functionResponse.response = { error: `Unknown tool called: ${call.name}` }
+          }
+        } catch (error) {
+          toolResponse.functionResponse.response = { error: `Tool execution failed: ${(error as Error).message}` }
         }
 
         result = await chat.sendMessage([toolResponse])
         response = await result.response
         functionCalls = response.functionCalls()
+        callCount++
       }
 
       return response.text()
@@ -251,6 +363,18 @@ ipcMain.handle('get-user-description', () => readStore().userDescription)
 ipcMain.handle('set-user-description', (_, desc: string) => writeToStore('userDescription', desc))
 ipcMain.handle('get-serpapi-key', () => readStore().serpApiKey)
 ipcMain.handle('set-serpapi-key', (_, key: string) => writeToStore('serpApiKey', key))
+
+// Overlay state management
+ipcMain.handle('get-overlay-state', () => isOverlayInteractive)
+ipcMain.handle('set-overlay-interactive', (_, interactive: boolean) => {
+  const mainWindow = BrowserWindow.getAllWindows()[0]
+  if (mainWindow) {
+    isOverlayInteractive = interactive
+    mainWindow.setIgnoreMouseEvents(!interactive, { forward: true })
+    mainWindow.webContents.send('overlay-state-changed', interactive)
+    console.log(`Overlay set to ${interactive ? 'interactive' : 'pass-through'} mode via IPC`)
+  }
+})
 
 
 let vadInstance: any;
@@ -382,11 +506,15 @@ ipcMain.handle('history:generateTitle', async (_, chatId: string, history: Conte
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-        const conversationForPrompt = history.slice(0, 4).map(h => `${h.role}: ${h.parts[0].text}`).join('\n');
-        const titlePrompt = `Based on the following conversation, create a very short, concise title (5 words or less). Do not use quotation marks.\n\nConversation:\n${conversationForPrompt}`;
+        // Use only the first user message for title generation
+        const firstUserMessage = history.find(h => h.role === 'user');
+        if (!firstUserMessage) return;
+        
+        const messageText = firstUserMessage.parts[0].text.slice(0, 200); // Limit to 200 chars
+        const titlePrompt = `Create a 3-4 word title for this query: "${messageText}". No quotes.`;
 
         const result = await model.generateContent(titlePrompt);
-        let title = result.response.text().trim().replace(/^"|"$/g, ''); 
+        let title = result.response.text().trim().replace(/^\"|\"|\"$/g, ''); 
 
         if (title) {
             const manifest = await readManifest();

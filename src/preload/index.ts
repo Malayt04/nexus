@@ -16,6 +16,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onCoachResponse: (callback: (event: any, ...args: any[]) => void) => ipcRenderer.on('coach-response', callback),
   onCoachResponseError: (callback: (event: any, ...args: any[]) => void) => ipcRenderer.on('coach-response-error', callback),
 
+  // Overlay state management
+  getOverlayState: () => ipcRenderer.invoke('get-overlay-state'),
+  setOverlayInteractive: (interactive: boolean) => ipcRenderer.invoke('set-overlay-interactive', interactive),
+  onOverlayStateChanged: (callback: (event: any, isInteractive: boolean) => void) => ipcRenderer.on('overlay-state-changed', callback),
+  onFocusInput: (callback: (event: any) => void) => ipcRenderer.on('focus-input', callback),
+  onToggleScreenshot: (callback: (event: any) => void) => ipcRenderer.on('toggle-screenshot', callback),
+
   history: {
     getAllChats: () => ipcRenderer.invoke('history:getAllChats'),
     getChatContent: (chatId: string) => ipcRenderer.invoke('history:getChatContent', chatId),
