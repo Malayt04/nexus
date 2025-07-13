@@ -93,13 +93,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
 
   // Handle focus input event from main process
   useEffect(() => {
-    const handleFocusInput = () => {
+    window.electronAPI.onFocusInput(() => {
       if (textareaRef.current) {
-        textareaRef.current.focus()
+        textareaRef.current.focus();
       }
-    }
-    
-    window.electronAPI.onFocusInput(handleFocusInput)
+    });
+
+    window.electronAPI.onSendMessage(() => {
+      handleSubmit();
+    });
     
     return () => {
       // Cleanup if needed
@@ -220,6 +222,21 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
     }
   }, [handleSubmit])
 
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === ';') {
+        e.preventDefault();
+        setIncludeScreenshot(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, []);
+
   const toggleAudioMode = useCallback(() => {
     const nextAudioModeState = !isAudioMode
     setIsAudioMode(nextAudioModeState)
@@ -260,18 +277,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
   }
 
   return (
-    <div className="w-full h-full flex flex-col rounded-xl shadow-2xl">
-      <div className="draggable flex-shrink-0 p-3 flex justify-between items-center border-b border-white/10">
+    <div className="w-full h-full flex flex-col rounded-xl shadow-2xl bg-gray-900/80 border border-gray-600">
+      <div className="draggable flex-shrink-0 p-3 flex justify-between items-center border-b border-gray-600">
         <button
           onClick={() => navigate('history')}
-          className="non-draggable text-gray-400 hover:text-white transition-colors"
+          className="non-draggable text-gray-300 hover:text-white transition-colors"
         >
           &larr; History
         </button>
-        <h2 className="text-lg font-semibold text-gray-200">Nexus AI</h2>
+        <h2 className="text-lg font-semibold text-white">Nexus AI</h2>
         <button
           onClick={startNewChat}
-          className="non-draggable text-gray-400 hover:text-white transition-colors"
+          className="non-draggable text-gray-300 hover:text-white transition-colors"
         >
           New Chat
         </button>
@@ -297,7 +314,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
       </div>
 
       <form onSubmit={handleSubmit} className="flex-shrink-0 p-4 border-t border-white/10">
-        <div className="relative flex items-end p-2 bg-gray-900 rounded-2xl border border-gray-700 focus-within:border-indigo-500 transition-colors">
+        <div className="mb-7 relative flex items-end p-2 bg-gray-900 rounded-2xl border border-gray-700 focus-within:border-indigo-500 transition-colors">
           <button
             type="button"
             onClick={toggleAudioMode}
@@ -392,7 +409,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={isLoading || isAudioMode}
-            className="autoresize-textarea w-full bg-transparent text-gray-200 text-base pl-3 pr-10 pb-2 focus:outline-none disabled:opacity-50 max-h-40"
+            className="non-draggable autoresize-textarea w-full bg-transparent text-gray-200 text-base pl-3 pr-10 pb-2 focus:outline-none disabled:opacity-50 max-h-40"
             placeholder={isAudioMode ? 'Listening...' : 'Type or speak...'}
             rows={1}
           />
@@ -400,7 +417,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
           <button
             type="submit"
             disabled={isLoading || (!input.trim() && !attachedFile)}
-            className="p-2 text-gray-400 hover:text-indigo-500 disabled:opacity-50 disabled:hover:text-gray-400 transition-colors self-center"
+            className="non-draggable p-2 text-gray-400 hover:text-indigo-500 disabled:opacity-50 disabled:hover:text-gray-400 transition-colors self-center"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -418,59 +435,28 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
             </svg>
           </button>
         </div>
-        <div className="flex items-center justify-between mt-2 h-5">
-          <div
-            className={`flex items-center transition-opacity duration-300 ${
-              isAudioMode ? 'opacity-100' : 'opacity-0'
-            }`}
-          >
-            <div
-              className={`w-2 h-2 rounded-full mr-2 transition-colors ${
-                visionTriggered ? 'bg-green-400 animate-pulse' : 'bg-gray-500'
-              }`}
-            ></div>
-            <span className="text-xs text-gray-400">
-              {visionTriggered ? 'Vision Triggered!' : 'Say "read my screen" for context.'}
-            </span>
+        <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
+          <div className="flex items-center">
+            <div className={`w-2 h-2 rounded-full mr-2 transition-colors ${isAudioMode && listening ? 'bg-red-500 animate-pulse' : 'bg-gray-600'}`}></div>
           </div>
-          <div className="flex items-center space-x-4">
-            {includeScreenshot && (
-              <div className="text-xs text-green-400 flex items-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-3 h-3 mr-1"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z"
-                  />
-                </svg>
-                Screenshot enabled
-              </div>
-            )}
-            {attachedFile && (
-              <div className="text-xs text-gray-400 flex items-center bg-gray-800 px-2 py-1 rounded-md">
-                <span>{attachedFile.name}</span>
-                <button
-                  type="button"
-                  onClick={() => setAttachedFile(null)}
-                  className="ml-2 text-red-500 hover:text-red-400"
-                >
-                  &times;
-                </button>
-              </div>
-            )}
-          </div>
+        </div>
+
+        <div className="flex items-center justify-end mt-1 space-x-4 h-5">
+          {includeScreenshot && (
+            <div className="text-xs text-green-400 flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3 h-3 mr-1">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
+              </svg>
+              Screenshot enabled
+            </div>
+          )}
+          {attachedFile && (
+            <div className="text-xs text-gray-400 flex items-center bg-gray-800 px-2 py-1 rounded-md">
+              <span>{attachedFile.name}</span>
+              <button type="button" onClick={() => setAttachedFile(null)} className="ml-2 text-red-500 hover:text-red-400">&times;</button>
+            </div>
+          )}
         </div>
       </form>
     </div>

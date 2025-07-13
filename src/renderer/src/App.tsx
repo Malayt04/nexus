@@ -126,7 +126,7 @@ function App() {
   return (
     <div className="h-screen w-screen text-gray-12 backdrop-blur-xl flex flex-col items-center justify-center p-4 rounded-xl border border-slate-6 relative">
       {/* Overlay State Indicator */}
-      <div className={`absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-medium transition-all duration-300 ${
+      <div className={`absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-medium mr-20 mt-3 transition-all duration-300 p-3 ${
         isOverlayInteractive 
           ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
           : 'bg-red-500/20 text-red-400 border border-red-500/30'
@@ -135,11 +135,11 @@ function App() {
       </div>
       
       {/* Keyboard Shortcuts Help */}
-      <div className="absolute bottom-4 left-4 text-xs text-gray-400 opacity-70 space-y-1">
+      <div className="ml-10 mb-3 absolute bottom-4 left-4 text-xs text-gray-400 opacity-70 space-y-1">
         <div>Ctrl+Enter: Toggle mode</div>
-        <div>Ctrl+Shift+Enter: Activate & focus</div>
+        <div>Ctrl+Shift+Enter: Activate & focus on input box</div>
         <div>Ctrl+Esc: Pass-through mode</div>
-        <div>Ctrl+S: Toggle screenshot</div>
+        <div>Ctrl+;: Toggle screenshot</div>
       </div>
       
       <Suspense fallback={<div className="text-xl font-semibold text-yellow-400">Loading...</div>}>
