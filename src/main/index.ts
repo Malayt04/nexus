@@ -19,21 +19,20 @@ import { createMeetingCoachPrompt, createSystemPrompt } from "./prompt";
 import { getJson } from "serpapi";
 import crypto from "crypto";
 import vad from "@ricky0123/vad-web";
+import { getConfigPath } from "./utils";
 
 const configFileName = "config.json";
+const configPath = getConfigPath(configFileName)
+
+//This data will be stored locally on the user's machine
 type StoreData = {
-  apiKey: string;
-  userDescription?: string;
-  serpApiKey: string;
+  apiKey: string; //Gemini API Key
+  userDescription?: string; //User's description to get more personalized response
+  serpApiKey: string; //SerpAPI Key for web search
 };
 
-function getConfigPath(): string {
-  const userDataPath = app.getPath("userData");
-  return path.join(userDataPath, configFileName);
-}
-
+//This function will read the data from the config file
 function readStore(): StoreData {
-  const configPath = getConfigPath();
   try {
     return JSON.parse(require("fs").readFileSync(configPath, "utf8"));
   } catch (error) {
@@ -41,17 +40,20 @@ function readStore(): StoreData {
   }
 }
 
+//This function will write the data to the config file
 function writeToStore(key: keyof StoreData, value: string) {
-  const configPath = getConfigPath();
   const data = readStore();
   data[key] = value;
   require("fs").writeFileSync(configPath, JSON.stringify(data, null, 2));
 }
 
+// Path to the manifest file which stores chat history
 const manifestPath = path.join(
   app.getPath("userData"),
   "history_manifest.json"
 );
+
+// Path to the chats directory
 const chatsPath = path.join(app.getPath("userData"), "chats");
 
 async function ensureStoragePathsExist() {
@@ -67,6 +69,7 @@ async function ensureStoragePathsExist() {
   }
 }
 
+// Read the manifest file and return chats
 async function readManifest() {
   try {
     const data = await fs.readFile(manifestPath, "utf-8");
@@ -80,9 +83,9 @@ async function readManifest() {
 // Track overlay interaction state
 let isOverlayInteractive = false;
 
+//Initial application configuration
 function createWindow() {
   const preloadScriptPath = path.join(__dirname, "../preload/index.js");
-
   const mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
@@ -93,7 +96,7 @@ function createWindow() {
     hasShadow: false,
     resizable: false,
     vibrancy: "under-window",
-    icon: path.join(__dirname, "../../resources/nexus-icon.png"), // Add your icon here
+    icon: path.join(__dirname, "../../resources/nexus-icon.png"), 
     webPreferences: {
       preload: preloadScriptPath,
       contextIsolation: true,
@@ -132,7 +135,6 @@ function createWindow() {
     mainWindow.setPosition(currentPosition[0] + x, currentPosition[1] + y);
   };
 
-  // Function to toggle overlay interaction mode
   const toggleOverlayInteraction = () => {
     isOverlayInteractive = !isOverlayInteractive;
     mainWindow.setIgnoreMouseEvents(!isOverlayInteractive, { forward: true });
@@ -145,44 +147,58 @@ function createWindow() {
     );
   };
 
-  // Register keyboard shortcuts
-  globalShortcut.register("CommandOrControl+Right", () => moveWindow(50, 0));
-  globalShortcut.register("CommandOrControl+Left", () => moveWindow(-50, 0));
-  globalShortcut.register("CommandOrControl+Up", () => moveWindow(0, -50));
-  globalShortcut.register("CommandOrControl+Down", () => moveWindow(0, 50));
-  globalShortcut.register(`CommandOrControl+H`, () =>
-    mainWindow.isAlwaysOnTop()
-      ? mainWindow.setAlwaysOnTop(false)
-      : mainWindow.setAlwaysOnTop(true)
-  );
+  const registerShortcuts = () => {
+    console.log("Registering shortcuts");
+    globalShortcut.register("CommandOrControl+Right", () => moveWindow(50, 0));
+    globalShortcut.register("CommandOrControl+Left", () => moveWindow(-50, 0));
+    globalShortcut.register("CommandOrControl+Up", () => moveWindow(0, -50));
+    globalShortcut.register("CommandOrControl+Down", () => moveWindow(0, 50));
+    globalShortcut.register(`CommandOrControl+H`, () =>
+      mainWindow.isAlwaysOnTop()
+        ? mainWindow.setAlwaysOnTop(false)
+        : mainWindow.setAlwaysOnTop(true)
+    );
 
-  // Main toggle shortcut - Ctrl+Enter to toggle interaction mode
-  globalShortcut.register("CommandOrControl+Return", toggleOverlayInteraction);
+    globalShortcut.register("CommandOrControl+\\", () => {
+      console.log("CommandOrControl+\\ pressed");
+      mainWindow.webContents.send("focus-input");
+    });
 
-  // Alternative shortcuts for different functions
-  globalShortcut.register("CommandOrControl+Shift+Return", () => {
-    // Force interactive mode and focus input
-    isOverlayInteractive = true;
-    mainWindow.setIgnoreMouseEvents(false);
-    mainWindow.webContents.send("overlay-state-changed", isOverlayInteractive);
-    mainWindow.webContents.send("focus-input");
-    console.log("Overlay activated and input focused");
+    // New shortcut for toggling screenshot
+    globalShortcut.register("CommandOrControl+;", () => {
+      console.log("CommandOrControl+; pressed");
+      mainWindow.webContents.send("toggle-screenshot");
+    });
+
+    // New shortcut for new chat
+    globalShortcut.register("CommandOrControl+N", () => {
+      console.log("CommandOrControl+N pressed");
+      mainWindow.webContents.send("new-chat");
+    });
+
+    // Main toggle shortcut - Ctrl+Enter to toggle interaction mode
+    globalShortcut.register("CommandOrControl+Return", () => {
+      console.log("CommandOrControl+Return pressed");
+      toggleOverlayInteraction();
+    });
+
+    globalShortcut.register("CommandOrControl+Escape", () => {
+      // Force pass-through mode
+      isOverlayInteractive = false;
+      mainWindow.setIgnoreMouseEvents(true, { forward: true });
+      mainWindow.webContents.send("overlay-state-changed", isOverlayInteractive);
+      console.log("Overlay set to pass-through mode");
+    });
+  }
+
+  registerShortcuts();
+
+  mainWindow.on('blur', () => {
+    console.log('Window blurred');
   });
 
-  globalShortcut.register("CommandOrControl+Escape", () => {
-    // Force pass-through mode
-    isOverlayInteractive = false;
-    mainWindow.setIgnoreMouseEvents(true, { forward: true });
-    mainWindow.webContents.send("overlay-state-changed", isOverlayInteractive);
-    console.log("Overlay set to pass-through mode");
-  });
-
-  globalShortcut.register("CommandOrControl+\\", () => {
-    mainWindow.webContents.send("focus-input");
-  });
-
-  globalShortcut.register("CommandOrControl+Return", () => {
-    mainWindow.webContents.send("send-message");
+  mainWindow.on('focus', () => {
+    console.log('Window focused');
   });
 }
 

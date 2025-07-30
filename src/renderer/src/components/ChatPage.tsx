@@ -59,72 +59,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
     if (isAudioMode) setInput(transcript)
   }, [transcript, isAudioMode])
 
-  useEffect(() => {
-    if (silenceTimer.current) clearTimeout(silenceTimer.current)
-    if (isAudioMode && transcript.trim()) {
-      silenceTimer.current = setTimeout(() => handleSubmit(), 1500)
-    }
-    return () => {
-      if (silenceTimer.current) clearTimeout(silenceTimer.current)
-    }
-  }, [transcript, isAudioMode])
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  useEffect(() => {
-    const loadChat = async () => {
-      if (chatId) {
-        setIsLoading(true)
-        const chatContent = await window.electronAPI.history.getChatContent(chatId)
-        if (chatContent && chatContent.messages) setMessages(chatContent.messages)
-        else {
-          setChatId(null)
-          setMessages([])
-        }
-        setIsLoading(false)
-      } else {
-        setMessages([])
-      }
-    }
-    loadChat()
-  }, [chatId, setChatId])
-
-  // Handle focus input event from main process
-  useEffect(() => {
-    window.electronAPI.onFocusInput(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-      }
-    });
-
-    window.electronAPI.onSendMessage(() => {
-      handleSubmit();
-    });
-    
-    return () => {
-      // Cleanup if needed
-    }
-  }, [])
-
-  // Handle screenshot toggle shortcut from main process
-  useEffect(() => {
-    const handleToggleScreenshot = () => {
-      setIncludeScreenshot(prev => !prev)
-      // Focus on the input if screenshot is enabled
-      if (textareaRef.current) {
-        textareaRef.current.focus()
-      }
-    }
-    
-    window.electronAPI.onToggleScreenshot(handleToggleScreenshot)
-    
-    return () => {
-      // Cleanup if needed
-    }
-  }, [])
-
   const handleSubmit = useCallback(async (e?: FormEvent) => {
     if (e) e.preventDefault()
     const finalInput = input.trim()
@@ -215,27 +149,84 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
     }
   }, [input, attachedFile, isLoading, includeScreenshot, visionTriggered, messages, chatId, isAudioMode, resetTranscript, setChatId])
 
+  const startNewChat = useCallback(() => {
+    setIsAudioMode(false)
+    SpeechRecognition.stopListening()
+    setChatId(null)
+    setMessages([])
+    setInput('')
+    resetTranscript()
+    setIncludeScreenshot(false)
+    setAttachedFile(null)
+  }, [resetTranscript, setChatId])
+
+  useEffect(() => {
+    const handleFocusInput = () => {
+      if (textareaRef.current) {
+        if (document.activeElement === textareaRef.current) {
+          textareaRef.current.blur();
+        } else {
+          textareaRef.current.focus();
+        }
+      }
+    };
+
+    const handleToggleScreenshot = () => {
+      setIncludeScreenshot(prev => !prev)
+      // Focus on the input if screenshot is enabled
+      if (textareaRef.current) {
+        textareaRef.current.focus()
+      }
+    }
+
+    window.electronAPI.onFocusInput(handleFocusInput)
+    window.electronAPI.onSendMessage(handleSubmit as () => void);
+    window.electronAPI.onNewChat(startNewChat);
+    window.electronAPI.onToggleScreenshot(handleToggleScreenshot)
+    
+    return () => {
+      // Cleanup if needed
+    }
+  }, [startNewChat, handleSubmit])
+
+  useEffect(() => {
+    if (silenceTimer.current) clearTimeout(silenceTimer.current)
+    if (isAudioMode && transcript.trim()) {
+      silenceTimer.current = setTimeout(() => handleSubmit(), 1500)
+    }
+    return () => {
+      if (silenceTimer.current) clearTimeout(silenceTimer.current)
+    }
+  }, [transcript, isAudioMode, handleSubmit])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  useEffect(() => {
+    const loadChat = async () => {
+      if (chatId) {
+        setIsLoading(true)
+        const chatContent = await window.electronAPI.history.getChatContent(chatId)
+        if (chatContent && chatContent.messages) setMessages(chatContent.messages)
+        else {
+          setChatId(null)
+          setMessages([])
+        }
+        setIsLoading(false)
+      } else {
+        setMessages([])
+      }
+    }
+    loadChat()
+  }, [chatId, setChatId])
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSubmit()
     }
   }, [handleSubmit])
-
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === ';') {
-        e.preventDefault();
-        setIncludeScreenshot(prev => !prev);
-      }
-    };
-
-    window.addEventListener('keydown', handleGlobalKeyDown);
-
-    return () => {
-      window.removeEventListener('keydown', handleGlobalKeyDown);
-    };
-  }, []);
 
   const toggleAudioMode = useCallback(() => {
     const nextAudioModeState = !isAudioMode
@@ -256,17 +247,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
       setAttachedFile({ name: file.name, path: (file as any).path })
     }
   }, [])
-
-  const startNewChat = useCallback(() => {
-    setIsAudioMode(false)
-    SpeechRecognition.stopListening()
-    setChatId(null)
-    setMessages([])
-    setInput('')
-    resetTranscript()
-    setIncludeScreenshot(false)
-    setAttachedFile(null)
-  }, [resetTranscript, setChatId])
 
   if (!browserSupportsSpeechRecognition) {
     return (

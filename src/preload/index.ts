@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onFocusInput: (callback: (event: any) => void) => ipcRenderer.on('focus-input', callback),
   onToggleScreenshot: (callback: (event: any) => void) => ipcRenderer.on('toggle-screenshot', callback),
   onSendMessage: (callback: (event: any) => void) => ipcRenderer.on('send-message', callback),
+  onNewChat: (callback: (event: any) => void) => ipcRenderer.on('new-chat', callback),
 
   history: {
     getAllChats: () => ipcRenderer.invoke('history:getAllChats'),
