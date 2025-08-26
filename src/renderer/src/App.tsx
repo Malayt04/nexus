@@ -28,11 +28,10 @@ declare global {
       stopAudioListening: () => Promise<void>;
       onCoachResponse: (callback: (event: any, ...args: any[]) => void) => void;
       onCoachResponseError: (callback: (event: any, ...args: any[]) => void) => void;
-      // Overlay state management
-      getOverlayState: () => Promise<boolean>;
-      setOverlayInteractive: (interactive: boolean) => Promise<void>;
-      onOverlayStateChanged: (callback: (event: any, isInteractive: boolean) => void) => void;
       onFocusInput: (callback: (event: any) => void) => void;
+      onToggleScreenshot: (callback: (event: any) => void) => void;
+      onSendMessage: (callback: (event: any) => void) => void;
+      onNewChat: (callback: (event: any) => void) => void;
       history: {
         getAllChats: () => Promise<any[]>;
         getChatContent: (chatId: string) => Promise<{ messages: any[] } | null>;
@@ -50,22 +49,19 @@ function App() {
   const [serpApiKey, setSerpApiKey] = useState<string>('');
   const [userDescription, setUserDescription] = useState<string>('');
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
-  const [isOverlayInteractive, setIsOverlayInteractive] = useState<boolean>(false);
 
   useEffect(() => {
     const initializeApp = async () => {
         if (window.electronAPI) {
-          const [storedKey, storedDesc, storedSerpKey, overlayState] = await Promise.all([
-              window.electronAPI.getApiKey(),
-              window.electronAPI.getUserDescription(),
-              window.electronAPI.getSerpApiKey(),
-              window.electronAPI.getOverlayState(),
-          ]);
-          
-          if (storedKey) setApiKey(storedKey);
-          if (storedDesc) setUserDescription(storedDesc);
-          if (storedSerpKey) setSerpApiKey(storedSerpKey);
-          setIsOverlayInteractive(overlayState);
+        const [storedKey, storedDesc, storedSerpKey] = await Promise.all([
+            window.electronAPI.getApiKey(),
+            window.electronAPI.getUserDescription(),
+            window.electronAPI.getSerpApiKey(),
+        ]);
+        
+        if (storedKey) setApiKey(storedKey);
+        if (storedDesc) setUserDescription(storedDesc);
+        if (storedSerpKey) setSerpApiKey(storedSerpKey);
   
           if (!storedDesc) {
             setCurrentPage('setup');
@@ -75,10 +71,6 @@ function App() {
             setCurrentPage('landing');
           }
           
-          // Set up overlay state change listener
-          window.electronAPI.onOverlayStateChanged((_, isInteractive) => {
-            setIsOverlayInteractive(isInteractive);
-          });
           
         } else {
           console.error("Fatal Error: window.electronAPI is not defined.");
@@ -125,21 +117,13 @@ function App() {
 
   return (
     <div className="h-screen w-screen text-gray-12 backdrop-blur-xl flex flex-col items-center justify-center p-4 rounded-xl border border-slate-6 relative">
-      {/* Overlay State Indicator */}
-      <div className={`absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-medium mr-20 mt-3 transition-all duration-300 p-3 ${
-        isOverlayInteractive 
-          ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
-          : 'bg-red-500/20 text-red-400 border border-red-500/30'
-      }`}>
-        {isOverlayInteractive ? 'Interactive' : 'Pass-through'}
-      </div>
-      
       {/* Keyboard Shortcuts Help */}
       <div className="ml-10 mb-3 absolute bottom-4 left-4 text-xs text-gray-400 opacity-70 space-y-1">
-        <div>Ctrl+Enter: Toggle mode</div>
-        <div>Ctrl+Shift+Enter: Activate & focus on input box</div>
-        <div>Ctrl+Esc: Pass-through mode</div>
+        <div>Ctrl+\: Focus input box</div>
+        <div>Ctrl+Enter: Send message</div>
         <div>Ctrl+;: Toggle screenshot</div>
+        <div>Ctrl+N: New chat</div>
+        <div>Arrow keys: Move window</div>
       </div>
       
       <Suspense fallback={<div className="text-xl font-semibold text-yellow-400">Loading...</div>}>

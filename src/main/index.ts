@@ -80,8 +80,6 @@ async function readManifest() {
   }
 }
 
-// Track overlay interaction state
-let isOverlayInteractive = false;
 
 //Initial application configuration
 function createWindow() {
@@ -105,8 +103,8 @@ function createWindow() {
     },
   });
 
-  // Set initial state to pass-through (non-interactive)
-  mainWindow.setIgnoreMouseEvents(true, { forward: true });
+  // Keep window always interactive
+  mainWindow.setIgnoreMouseEvents(false);
 
   if (process.platform === "darwin") {
     mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -135,17 +133,6 @@ function createWindow() {
     mainWindow.setPosition(currentPosition[0] + x, currentPosition[1] + y);
   };
 
-  const toggleOverlayInteraction = () => {
-    isOverlayInteractive = !isOverlayInteractive;
-    mainWindow.setIgnoreMouseEvents(!isOverlayInteractive, { forward: true });
-
-    // Send state to renderer for UI feedback
-    mainWindow.webContents.send("overlay-state-changed", isOverlayInteractive);
-
-    console.log(
-      `Overlay is now ${isOverlayInteractive ? "interactive" : "pass-through"}`
-    );
-  };
 
   const registerShortcuts = () => {
     console.log("Registering shortcuts");
@@ -161,33 +148,41 @@ function createWindow() {
 
     globalShortcut.register("CommandOrControl+\\", () => {
       console.log("CommandOrControl+\\ pressed");
+      // Bring window to focus and show it
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
       mainWindow.webContents.send("focus-input");
     });
 
     // New shortcut for toggling screenshot
     globalShortcut.register("CommandOrControl+;", () => {
       console.log("CommandOrControl+; pressed");
+      // Bring window to focus when using screenshot shortcut
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
       mainWindow.webContents.send("toggle-screenshot");
     });
 
     // New shortcut for new chat
     globalShortcut.register("CommandOrControl+N", () => {
       console.log("CommandOrControl+N pressed");
+      // Bring window to focus when starting new chat
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
       mainWindow.webContents.send("new-chat");
     });
 
-    // Main toggle shortcut - Ctrl+Enter to toggle interaction mode
+    // Shortcut to send message (Ctrl+Enter)
     globalShortcut.register("CommandOrControl+Return", () => {
-      console.log("CommandOrControl+Return pressed");
-      toggleOverlayInteraction();
-    });
-
-    globalShortcut.register("CommandOrControl+Escape", () => {
-      // Force pass-through mode
-      isOverlayInteractive = false;
-      mainWindow.setIgnoreMouseEvents(true, { forward: true });
-      mainWindow.webContents.send("overlay-state-changed", isOverlayInteractive);
-      console.log("Overlay set to pass-through mode");
+      console.log("CommandOrControl+Return pressed - sending message");
+      // Ensure window is focused when sending message
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+      mainWindow.webContents.send("send-message");
     });
   }
 
@@ -444,21 +439,6 @@ ipcMain.handle("set-serpapi-key", (_, key: string) =>
   writeToStore("serpApiKey", key)
 );
 
-// Overlay state management
-ipcMain.handle("get-overlay-state", () => isOverlayInteractive);
-ipcMain.handle("set-overlay-interactive", (_, interactive: boolean) => {
-  const mainWindow = BrowserWindow.getAllWindows()[0];
-  if (mainWindow) {
-    isOverlayInteractive = interactive;
-    mainWindow.setIgnoreMouseEvents(!interactive, { forward: true });
-    mainWindow.webContents.send("overlay-state-changed", interactive);
-    console.log(
-      `Overlay set to ${
-        interactive ? "interactive" : "pass-through"
-      } mode via IPC`
-    );
-  }
-});
 
 let vadInstance: any;
 
@@ -650,6 +630,9 @@ app.whenReady().then(() => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+  
+  // Register shortcuts when app is ready
+  // Note: globalShortcut should work even when app is not focused
 });
 
 app.on("window-all-closed", () => {

@@ -29,6 +29,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
   const [isAudioMode, setIsAudioMode] = useState(false)
   const [visionTriggered, setVisionTriggered] = useState(false)
   const [includeScreenshot, setIncludeScreenshot] = useState(false)
+  
+  // Debug log for includeScreenshot changes
+  useEffect(() => {
+    console.log('includeScreenshot state changed to:', includeScreenshot);
+  }, [includeScreenshot]);
   const [attachedFile, setAttachedFile] = useState<{ name: string; path: string } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const silenceTimer = useRef<NodeJS.Timeout | null>(null)
@@ -160,34 +165,45 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
     setAttachedFile(null)
   }, [resetTranscript, setChatId])
 
+  const handleToggleScreenshot = useCallback(() => {
+    setIncludeScreenshot(prev => {
+      const newState = !prev;
+      console.log('Toggling screenshot state to:', newState); // Debug log
+      if (newState) {
+        textareaRef.current?.focus();
+      }
+      return newState;
+    });
+  }, []);
+
   useEffect(() => {
     const handleFocusInput = () => {
-      if (textareaRef.current) {
-        if (document.activeElement === textareaRef.current) {
-          textareaRef.current.blur();
-        } else {
+      setTimeout(() => {
+        if (textareaRef.current) {
           textareaRef.current.focus();
+          const length = textareaRef.current.value.length;
+          textareaRef.current.setSelectionRange(length, length);
+          window.focus();
         }
-      }
+      }, 100);
     };
 
-    const handleToggleScreenshot = () => {
-      setIncludeScreenshot(prev => !prev)
-      // Focus on the input if screenshot is enabled
-      if (textareaRef.current) {
-        textareaRef.current.focus()
-      }
-    }
+    // Store cleanup functions in a ref to ensure we have the latest ones
+    const cleanupFunctions = {
+      focus: window.electronAPI.onFocusInput(handleFocusInput),
+      sendMessage: window.electronAPI.onSendMessage(handleSubmit as () => void),
+      newChat: window.electronAPI.onNewChat(startNewChat),
+      toggleScreenshot: window.electronAPI.onToggleScreenshot(handleToggleScreenshot)
+    };
 
-    window.electronAPI.onFocusInput(handleFocusInput)
-    window.electronAPI.onSendMessage(handleSubmit as () => void);
-    window.electronAPI.onNewChat(startNewChat);
-    window.electronAPI.onToggleScreenshot(handleToggleScreenshot)
-    
     return () => {
-      // Cleanup if needed
-    }
-  }, [startNewChat, handleSubmit])
+      // Clean up all listeners
+      if (typeof cleanupFunctions.focus === 'function') cleanupFunctions.focus();
+      if (typeof cleanupFunctions.sendMessage === 'function') cleanupFunctions.sendMessage();
+      if (typeof cleanupFunctions.newChat === 'function') cleanupFunctions.newChat();
+      if (typeof cleanupFunctions.toggleScreenshot === 'function') cleanupFunctions.toggleScreenshot();
+    };
+  }, [startNewChat, handleSubmit, handleToggleScreenshot]);
 
   useEffect(() => {
     if (silenceTimer.current) clearTimeout(silenceTimer.current)
@@ -356,7 +372,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
 
           <button
             type="button"
-            onClick={() => setIncludeScreenshot(!includeScreenshot)}
+            onClick={handleToggleScreenshot}
             className={`non-draggable p-2 rounded-full transition-all duration-300 self-center ml-2 ${
               includeScreenshot ? 'bg-green-600 text-white shadow-lg' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
             }`}
