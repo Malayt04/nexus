@@ -2,6 +2,12 @@
 
 **Nexus** is an ambient, context-aware AI assistant that lives on your desktop. It's designed to be an "over-the-shoulder" partner, capable of seeing your screen, understanding your requests, and even performing actions on your computer, all while remaining invisible to screen recordings.
 
+
+
+https://github.com/user-attachments/assets/740bb933-7b34-45bc-8630-e4076625c48b
+
+
+
 ## ✨ Core Features
 
 - **Context-Aware Vision:** Can analyze your screen to understand the context of your questions. Perfect for debugging code, summarizing articles, or getting help with any application.
