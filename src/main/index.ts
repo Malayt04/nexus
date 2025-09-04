@@ -202,7 +202,6 @@ ipcMain.handle(
   async (
     _,
     prompt: string,
-    includeScreenshot: boolean,
     history: Content[],
     file?: { path: string }
   ) => {
@@ -265,6 +264,21 @@ ipcMain.handle(
               },
             },
             {
+              name: "take_screenshot",
+              description:
+                "Takes a screenshot of the user's screen to see what's currently displayed. Use this when the user asks to read their screen, see what's on their screen, analyze their display, or when you need visual context of their current screen.",
+              parameters: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  reason: {
+                    type: SchemaType.STRING,
+                    description: "Brief explanation of why the screenshot is needed.",
+                  },
+                },
+                required: ["reason"],
+              },
+            },
+            {
               name: "web_search",
               description:
                 "Performs a web search to find recent information or data.",
@@ -292,55 +306,27 @@ ipcMain.handle(
 
       const promptParts: Part[] = [{ text: prompt }];
 
-      // Parallel processing for media attachments
-      const mediaPromises: Promise<any>[] = [];
-
-      if (includeScreenshot) {
-        mediaPromises.push(
-          desktopCapturer
-            .getSources({
-              types: ["screen"],
-              thumbnailSize: { width: 1280, height: 720 }, // Reduced resolution for faster processing
-            })
-            .then((sources) => {
-              const imageBuffer = sources[0].thumbnail.toPNG();
-              return {
-                inlineData: {
-                  mimeType: "image/png",
-                  data: imageBuffer.toString("base64"),
-                },
-              };
-            })
-        );
-      }
-
+      // Handle file attachment if provided (separate from screenshot)
       if (file) {
-        mediaPromises.push(
-          Promise.all([
+        try {
+          const [fileBuffer, fileTypeModule] = await Promise.all([
             fs.readFile(file.path),
             eval("import('file-type')"),
-          ]).then(async ([fileBuffer, fileTypeModule]) => {
-            const fileType = await fileTypeModule.fileTypeFromBuffer(
-              fileBuffer
-            );
-            if (fileType) {
-              return {
-                inlineData: {
-                  mimeType: fileType.mime,
-                  data: fileBuffer.toString("base64"),
-                },
-              };
-            }
-            return null;
-          })
-        );
+          ]);
+          
+          const fileType = await fileTypeModule.fileTypeFromBuffer(fileBuffer);
+          if (fileType) {
+            promptParts.unshift({
+              inlineData: {
+                mimeType: fileType.mime,
+                data: fileBuffer.toString("base64"),
+              },
+            });
+          }
+        } catch (error) {
+          console.error("Error processing file:", error);
+        }
       }
-
-      // Wait for all media processing to complete
-      const mediaResults = await Promise.all(mediaPromises);
-      mediaResults.forEach((result) => {
-        if (result) promptParts.unshift(result);
-      });
 
       let result = await chat.sendMessage(promptParts);
       let response = result.response;
@@ -380,6 +366,43 @@ ipcMain.handle(
               ]);
               toolResponse.functionResponse.response = commandResult;
               break;
+
+            case "take_screenshot":
+              try {
+                const sources = await desktopCapturer.getSources({
+                  types: ["screen"],
+                  thumbnailSize: { width: 1280, height: 720 },
+                });
+                
+                const imageBuffer = sources[0].thumbnail.toPNG();
+                const screenshotData = {
+                  inlineData: {
+                    mimeType: "image/png",
+                    data: imageBuffer.toString("base64"),
+                  },
+                };
+                
+                // Send the screenshot back to the AI for analysis
+                const screenshotResult = await chat.sendMessage([
+                  { text: `Here's the current screen content. ${call.args.reason || 'User requested screen analysis.'}` },
+                  screenshotData
+                ]);
+                
+                toolResponse.functionResponse.response = {
+                  success: true,
+                  message: "Screenshot taken and analyzed successfully",
+                };
+                
+                // Update the response to include screenshot analysis
+                response = screenshotResult.response;
+                
+              } catch (screenshotError) {
+                toolResponse.functionResponse.response = {
+                  error: `Screenshot failed: ${(screenshotError as Error).message}`,
+                };
+              }
+              break;
+
             case "web_search":
               const searchResults = await Promise.race([
                 getJson({
@@ -403,6 +426,7 @@ ipcMain.handle(
                 answer_box: searchResults["answer_box"] || null,
               };
               break;
+
             default:
               toolResponse.functionResponse.response = {
                 error: `Unknown tool called: ${call.name}`,
@@ -414,8 +438,12 @@ ipcMain.handle(
           };
         }
 
-        result = await chat.sendMessage([toolResponse]);
-        response = await result.response;
+        // Only send tool response if it's not a screenshot (screenshot handles its own response)
+        if (call.name !== "take_screenshot") {
+          result = await chat.sendMessage([toolResponse]);
+          response = result.response;
+        }
+        
         functionCalls = response.functionCalls();
         callCount++;
       }

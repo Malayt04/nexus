@@ -13,7 +13,6 @@ declare global {
     electronAPI: {
       invokeAI: (
         prompt: string,
-        includeScreenshot: boolean,
         history: any[],
         file?: { path: string }
       ) => Promise<string>

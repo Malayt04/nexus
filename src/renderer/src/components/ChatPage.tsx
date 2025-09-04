@@ -27,13 +27,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isAudioMode, setIsAudioMode] = useState(false)
-  const [visionTriggered, setVisionTriggered] = useState(false)
-  const [includeScreenshot, setIncludeScreenshot] = useState(false)
-  
-  // Debug log for includeScreenshot changes
-  useEffect(() => {
-    console.log('includeScreenshot state changed to:', includeScreenshot);
-  }, [includeScreenshot]);
   const [attachedFile, setAttachedFile] = useState<{ name: string; path: string } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const silenceTimer = useRef<NodeJS.Timeout | null>(null)
@@ -44,7 +37,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
   const commands = useMemo(() => [
     {
       command: ['read my screen', 'look at this', "what's on my screen", 'analyze this screen'],
-      callback: () => setVisionTriggered(true),
+      callback: () => {
+        // These voice commands will be handled by the AI's take_screenshot tool automatically
+        // No need for manual state management
+      },
       isFuzzyMatch: true,
       fuzzyMatchingThreshold: 0.8
     }
@@ -83,12 +79,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
     const currentAttachedFile = attachedFile
     setAttachedFile(null)
     setIsLoading(true)
-    
-    // Reset states immediately
-    if (includeScreenshot) setIncludeScreenshot(false)
-
-    const shouldIncludeScreenshot = includeScreenshot || visionTriggered
-    if (visionTriggered) setVisionTriggered(false)
 
     try {
       // Prepare history more efficiently - limit to last 4 messages (2 exchanges)
@@ -100,15 +90,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
           parts: [{ text: msg.text.slice(0, 1000) }] // Trim long messages
         }))
 
-      // Start AI call and chat saving in parallel
-      const aiPromise = window.electronAPI.invokeAI(
+
+      const aiResponse = await window.electronAPI.invokeAI(
         finalInput,
-        shouldIncludeScreenshot,
         aiHistory.slice(0, -1),
         currentAttachedFile || undefined
       )
-      
-      const aiResponse = await aiPromise
       
       // Check if response is actually an error
       if (aiResponse.startsWith('Error:')) {
@@ -152,7 +139,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
         SpeechRecognition.startListening({ continuous: true })
       }
     }
-  }, [input, attachedFile, isLoading, includeScreenshot, visionTriggered, messages, chatId, isAudioMode, resetTranscript, setChatId])
+  }, [input, attachedFile, isLoading, messages, chatId, isAudioMode, resetTranscript, setChatId])
 
   const startNewChat = useCallback(() => {
     setIsAudioMode(false)
@@ -161,20 +148,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
     setMessages([])
     setInput('')
     resetTranscript()
-    setIncludeScreenshot(false)
     setAttachedFile(null)
   }, [resetTranscript, setChatId])
-
-  const handleToggleScreenshot = useCallback(() => {
-    setIncludeScreenshot(prev => {
-      const newState = !prev;
-      console.log('Toggling screenshot state to:', newState); // Debug log
-      if (newState) {
-        textareaRef.current?.focus();
-      }
-      return newState;
-    });
-  }, []);
 
   useEffect(() => {
     const handleFocusInput = () => {
@@ -188,22 +163,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
       }, 100);
     };
 
-    // Store cleanup functions in a ref to ensure we have the latest ones
-    const cleanupFunctions = {
-      focus: window.electronAPI.onFocusInput(handleFocusInput),
-      sendMessage: window.electronAPI.onSendMessage(handleSubmit as () => void),
-      newChat: window.electronAPI.onNewChat(startNewChat),
-      toggleScreenshot: window.electronAPI.onToggleScreenshot(handleToggleScreenshot)
-    };
+    // Register listeners and store cleanup functions
+    const cleanupFocus = window.electronAPI.onFocusInput(handleFocusInput);
+    const cleanupSendMessage = window.electronAPI.onSendMessage(handleSubmit as () => void);
+    const cleanupNewChat = window.electronAPI.onNewChat(startNewChat);
 
+    // Return cleanup function to remove listeners
     return () => {
-      // Clean up all listeners
-      if (typeof cleanupFunctions.focus === 'function') cleanupFunctions.focus();
-      if (typeof cleanupFunctions.sendMessage === 'function') cleanupFunctions.sendMessage();
-      if (typeof cleanupFunctions.newChat === 'function') cleanupFunctions.newChat();
-      if (typeof cleanupFunctions.toggleScreenshot === 'function') cleanupFunctions.toggleScreenshot();
+      if (cleanupFocus) cleanupFocus();
+      if (cleanupSendMessage) cleanupSendMessage();
+      if (cleanupNewChat) cleanupNewChat();
     };
-  }, [startNewChat, handleSubmit, handleToggleScreenshot]);
+  }, [startNewChat, handleSubmit]);
 
   useEffect(() => {
     if (silenceTimer.current) clearTimeout(silenceTimer.current)
@@ -370,35 +341,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
             </svg>
           </button>
 
-          <button
-            type="button"
-            onClick={handleToggleScreenshot}
-            className={`non-draggable p-2 rounded-full transition-all duration-300 self-center ml-2 ${
-              includeScreenshot ? 'bg-green-600 text-white shadow-lg' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-            }`}
-            title={includeScreenshot ? 'Screenshot enabled' : 'Enable screenshot'}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-5 h-5"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z"
-              />
-            </svg>
-          </button>
-
           <textarea
             ref={textareaRef}
             value={input}
@@ -406,7 +348,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
             onKeyDown={handleKeyDown}
             disabled={isLoading || isAudioMode}
             className="non-draggable autoresize-textarea w-full bg-transparent text-gray-200 text-base pl-3 pr-10 pb-2 focus:outline-none disabled:opacity-50 max-h-40"
-            placeholder={isAudioMode ? 'Listening...' : 'Type or speak...'}
+            placeholder={isAudioMode ? 'Listening...' : 'Type or speak... (AI will take screenshots automatically when needed)'}
             rows={1}
           />
 
@@ -438,15 +380,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
         </div>
 
         <div className="flex items-center justify-end mt-1 space-x-4 h-5">
-          {includeScreenshot && (
-            <div className="text-xs text-green-400 flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3 h-3 mr-1">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
-              </svg>
-              Screenshot enabled
-            </div>
-          )}
           {attachedFile && (
             <div className="text-xs text-gray-400 flex items-center bg-gray-800 px-2 py-1 rounded-md">
               <span>{attachedFile.name}</span>
