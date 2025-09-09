@@ -4,6 +4,7 @@ import {
   ipcMain,
   desktopCapturer,
   globalShortcut,
+  screen,
 } from "electron";
 import * as path from "path";
 import * as fs from "fs/promises";
@@ -85,14 +86,16 @@ async function readManifest() {
 function createWindow() {
   const preloadScriptPath = path.join(__dirname, "../preload/index.js");
   const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 400,
+    height: 80,
+    x: Math.floor((screen.getPrimaryDisplay().workAreaSize.width - 400) / 2),
+    y: 0,
     frame: false,
     transparent: true,
     skipTaskbar: true,
     alwaysOnTop: true,
     hasShadow: false,
-    resizable: false,
+    resizable: true,
     vibrancy: "under-window",
     icon: path.join(__dirname, "../../resources/nexus-icon.png"), 
     webPreferences: {
@@ -103,8 +106,6 @@ function createWindow() {
     },
   });
 
-  // Keep window always interactive
-  mainWindow.setIgnoreMouseEvents(false);
 
   if (process.platform === "darwin") {
     mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -651,6 +652,89 @@ ipcMain.handle(
     }
   }
 );
+
+// Window resize handlers
+ipcMain.handle("resize-window-for-page", async (_, pageType: string) => {
+  const mainWindow = BrowserWindow.getAllWindows()[0];
+  if (!mainWindow) return;
+  
+  const display = screen.getPrimaryDisplay();
+  const { width: screenWidth, height: screenHeight } = display.workAreaSize;
+  
+  switch (pageType) {
+    case 'chat':
+      const chatWidth = Math.floor(screenWidth * 0.5); // Reduced from 0.8 to 0.5
+      const chatHeight = Math.floor(screenHeight * 0.65); // Reduced from 0.8 to 0.65
+      
+      // Calculate position to keep Dynamic Island in exact same place
+      const currentPos = mainWindow.getPosition();
+      const currentSize = mainWindow.getSize();
+      
+      // Dynamic Island is centered in current window, keep it centered in new window
+      const newX = currentPos[0] + Math.floor((currentSize[0] - chatWidth) / 2);
+      
+      mainWindow.setSize(chatWidth, chatHeight, true);
+      mainWindow.setPosition(newX, currentPos[1]); // Keep exact Y position
+      break;
+    case 'settings':
+    case 'history':
+      // Calculate position to keep Dynamic Island in exact same place
+      const currentPosModal = mainWindow.getPosition();
+      const currentSizeModal = mainWindow.getSize();
+      
+      // Keep Dynamic Island centered
+      const newXModal = currentPosModal[0] + Math.floor((currentSizeModal[0] - 700) / 2);
+      
+      mainWindow.setSize(700, 600, true); // Increased to make pages more visible
+      mainWindow.setPosition(newXModal, currentPosModal[1]);
+      break;
+    default: // minimal view
+      // Calculate position to keep Dynamic Island in exact same place
+      const currentPosMin = mainWindow.getPosition();
+      const currentSizeMin = mainWindow.getSize();
+      
+      // Keep Dynamic Island centered when going back to minimal
+      const newXMin = currentPosMin[0] + Math.floor((currentSizeMin[0] - 400) / 2);
+      
+      mainWindow.setSize(400, 80, true);
+      mainWindow.setPosition(newXMin, currentPosMin[1]);
+      break;
+  }
+});
+
+ipcMain.handle("resize-window-minimal", async () => {
+  const mainWindow = BrowserWindow.getAllWindows()[0];
+  if (!mainWindow) return;
+  
+  // Calculate position to keep Dynamic Island in exact same place
+  const currentPos = mainWindow.getPosition();
+  const currentSize = mainWindow.getSize();
+  
+  // Keep Dynamic Island centered when going back to minimal
+  const newX = currentPos[0] + Math.floor((currentSize[0] - 400) / 2);
+  
+  mainWindow.setSize(400, 80, true);
+  mainWindow.setPosition(newX, currentPos[1]);
+});
+
+ipcMain.handle("resize-window-for-menu", async (_, isExpanded: boolean) => {
+  const mainWindow = BrowserWindow.getAllWindows()[0];
+  if (!mainWindow) return;
+  
+  // Get current position to preserve it exactly
+  const currentPos = mainWindow.getPosition();
+  
+  if (isExpanded) {
+    // Expand for menu - keep same X position
+    mainWindow.setSize(400, 180, true);
+  } else {
+    // Back to minimal - keep same X position
+    mainWindow.setSize(400, 80, true);
+  }
+  
+  // Keep exact same position
+  mainWindow.setPosition(currentPos[0], currentPos[1]);
+});
 
 app.whenReady().then(() => {
   ensureStoragePathsExist();

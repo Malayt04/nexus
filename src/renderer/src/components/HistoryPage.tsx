@@ -3,6 +3,7 @@ import { Page } from '../App';
 
 interface HistoryPageProps {
   navigate: (page: Page, chatId?: string) => void;
+  onClose?: () => void;
 }
 
 interface ChatManifestEntry {
@@ -11,7 +12,7 @@ interface ChatManifestEntry {
     updatedAt: string;
 }
 
-const HistoryPage: React.FC<HistoryPageProps> = ({ navigate }) => {
+const HistoryPage: React.FC<HistoryPageProps> = ({ navigate, onClose }) => {
   const [chats, setChats] = useState<ChatManifestEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -43,7 +44,7 @@ const HistoryPage: React.FC<HistoryPageProps> = ({ navigate }) => {
   return (
     <div className="w-full h-full flex flex-col rounded-xl shadow-2xl animate-fade-in">
         <div className="draggable flex-shrink-0 p-3 flex justify-between items-center border-b border-gray-700">
-            <button onClick={() => navigate('landing')} className="non-draggable text-gray-400 hover:text-white transition-colors">&larr; Back</button>
+            <button onClick={onClose || (() => navigate('chat'))} className="non-draggable text-gray-400 hover:text-white transition-colors">&larr; Close</button>
             <h2 className="text-lg font-semibold text-gray-200">Chat History</h2>
             <div className="w-12"></div> {/* Spacer */}
         </div>

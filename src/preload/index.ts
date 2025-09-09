@@ -39,5 +39,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveChat: (data: { chatId: string | null, messagesToAppend: any[] }) => ipcRenderer.invoke('history:saveChat', data),
     deleteChat: (chatId: string) => ipcRenderer.invoke('history:deleteChat', chatId),
     generateTitle: (chatId: string, history: any[]) => ipcRenderer.invoke('history:generateTitle', chatId, history),
-  }
+  },
+  
+  // Window management
+  resizeWindowForPage: (pageType: string) => ipcRenderer.invoke('resize-window-for-page', pageType),
+  resizeWindowMinimal: () => ipcRenderer.invoke('resize-window-minimal'),
+  resizeWindowForMenu: (isExpanded: boolean) => ipcRenderer.invoke('resize-window-for-menu', isExpanded),
 });

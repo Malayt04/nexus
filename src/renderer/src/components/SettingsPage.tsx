@@ -3,12 +3,13 @@ import { Page } from '../App';
 
 interface SettingsPageProps {
   navigate: (page: Page) => void;
+  onClose?: () => void;
   setApiKey: (key: string) => void;
   setSerpApiKey: (key: string) => void;
   setUserDescription: (desc: string) => void;
 }
 
-const SettingsPage: React.FC<SettingsPageProps> = ({ navigate, setApiKey, setSerpApiKey, setUserDescription }) => {
+const SettingsPage: React.FC<SettingsPageProps> = ({ navigate, onClose, setApiKey, setSerpApiKey, setUserDescription }) => {
   const [geminiKeyInput, setGeminiKeyInput] = useState('');
   const [serpKeyInput, setSerpKeyInput] = useState('');
   const [description, setDescription] = useState('');
@@ -46,7 +47,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ navigate, setApiKey, setSer
     setMessage('Settings saved successfully!');
     setTimeout(() => {
         setMessage('');
-        navigate('home');
+        if (onClose) onClose();
     }, 1500);
   };
 
@@ -90,9 +91,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ navigate, setApiKey, setSer
             </div>
             <div className="mt-8 flex justify-between items-center non-draggable">
                 <button 
-                onClick={() => navigate('home')}
+                onClick={onClose || (() => navigate('chat'))}
                 className="bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold py-2 px-4 rounded-lg transition-colors duration-200">
-                Back to Home
+                Close
                 </button>
                 <button 
                 onClick={handleSave}

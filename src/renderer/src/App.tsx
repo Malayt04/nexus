@@ -4,7 +4,7 @@ const SettingsPage = React.lazy(() => import('./components/SettingsPage'));
 const ChatPage = React.lazy(() => import('./components/ChatPage'));
 const SetupPage = React.lazy(() => import('./components/SetUp'));
 const HistoryPage = React.lazy(() => import('./components/HistoryPage'));
-const MeetingAssistantPage = React.lazy(() => import('./components/MeetingAssistantPage'));
+import DynamicIsland from './components/DynamicIsland';
 
 export type Page = 'setup' | 'landing' | 'settings' | 'chat' | 'history' | 'home' | 'meeting';
 
@@ -38,12 +38,16 @@ declare global {
         deleteChat: (chatId: string) => Promise<boolean>;
         generateTitle: (chatId: string, history: any[]) => Promise<string | null>;
       }
+      resizeWindowForPage: (pageType: string) => Promise<void>;
+      resizeWindowMinimal: () => Promise<void>;
+      resizeWindowForMenu: (isExpanded: boolean) => Promise<void>;
     }
   }
 }
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page | null>(null);
+  const [isPageVisible, setIsPageVisible] = useState<boolean>(false);
   const [apiKey, setApiKey] = useState<string>('');
   const [serpApiKey, setSerpApiKey] = useState<string>('');
   const [userDescription, setUserDescription] = useState<string>('');
@@ -62,13 +66,12 @@ function App() {
         if (storedDesc) setUserDescription(storedDesc);
         if (storedSerpKey) setSerpApiKey(storedSerpKey);
   
-          if (!storedDesc) {
-            setCurrentPage('setup');
-          } else if (!storedKey || !storedSerpKey) {
-            setCurrentPage('settings');
-          } else {
-            setCurrentPage('landing');
-          }
+        // Check if setup is needed but don't automatically show pages
+        if (!storedDesc) {
+          // Show setup dialog on first launch
+          setCurrentPage('setup');
+          setIsPageVisible(true);
+        }
           
           
         } else {
@@ -78,55 +81,104 @@ function App() {
       initializeApp();
   }, []);
 
-  const navigate = (page: Page, chatId: string | null = null) => {
+  const navigate = async (page: Page, chatId: string | null = null) => {
+    console.log(`Navigating to: ${page}, chatId: ${chatId}`);
     setCurrentChatId(chatId); 
     setCurrentPage(page);
+    
+    // Resize window for the specific page first
+    if (window.electronAPI) {
+      await window.electronAPI.resizeWindowForPage(page);
+      // Small delay to ensure window resize completes smoothly
+      setTimeout(() => {
+        console.log(`Showing page: ${page}`);
+        setIsPageVisible(true);
+      }, 150);
+    } else {
+      setIsPageVisible(true);
+    }
+  };
+
+  const closePage = async () => {
+    // First hide the content with a fade effect
+    setIsPageVisible(false);
+    
+    // Small delay to let content fade out before resizing window
+    setTimeout(async () => {
+      if (window.electronAPI) {
+        await window.electronAPI.resizeWindowMinimal();
+      }
+    }, 100);
+  };
+
+  const togglePage = (page: Page, chatId: string | null = null) => {
+    if (currentPage === page && isPageVisible) {
+      closePage();
+    } else {
+      navigate(page, chatId);
+    }
   };
   
   const handleSetupComplete = (description: string) => {
     setUserDescription(description);
-    if (!apiKey || !serpApiKey) {
-      navigate('settings');
-    } else {
-      navigate('landing');
-    }
+    closePage(); // Close setup and return to minimal view
   };
 
   const renderPage = () => {
-    if (currentPage === null) {
-        return <div className="text-center"><h2 className="text-xl font-semibold mb-4 text-yellow-400">Initializing...</h2></div>;
+    console.log(`renderPage: isPageVisible=${isPageVisible}, currentPage=${currentPage}`);
+    if (!isPageVisible || currentPage === null) {
+      return null; // Show nothing when page is hidden
     }
+
+    const pageProps = {
+      onClose: closePage,
+      navigate,
+    };
 
     switch (currentPage) {
       case 'setup':
-        return <SetupPage onSetupComplete={handleSetupComplete} />;
+        return (
+          <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-xl animate-fade-in" style={{ top: '80px' }}>
+            <SetupPage onSetupComplete={handleSetupComplete} />
+          </div>
+        );
       case 'settings':
-        return <SettingsPage navigate={navigate} setApiKey={setApiKey} setSerpApiKey={setSerpApiKey} setUserDescription={setUserDescription} />;
-      case 'chat':
-        return <ChatPage navigate={navigate} chatId={currentChatId} setChatId={setCurrentChatId} />;
+        return (
+          <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-xl overflow-y-auto animate-fade-in" style={{ top: '80px' }}>
+            <SettingsPage {...pageProps} setApiKey={setApiKey} setSerpApiKey={setSerpApiKey} setUserDescription={setUserDescription} />
+          </div>
+        );
       case 'history':
-        return <HistoryPage navigate={navigate} />;
-      case 'meeting':
-        return <MeetingAssistantPage />;
-      case 'landing':
+        return (
+          <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-xl overflow-y-auto animate-fade-in" style={{ top: '80px' }}>
+            <HistoryPage {...pageProps} />
+          </div>
+        );
+      case 'chat':
       default:
-        return <LandingPage navigate={navigate} />;
+        return (
+          <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-xl animate-slide-down" style={{ top: '80px' }}>
+            <ChatPage navigate={navigate} chatId={currentChatId} setChatId={setCurrentChatId} onClose={closePage} />
+          </div>
+        );
     }
   };
 
   return (
-    <div className="h-screen w-screen text-gray-12 backdrop-blur-xl flex flex-col items-center justify-center p-4 rounded-xl border border-slate-6 relative">
-      {/* Keyboard Shortcuts Help */}
-      <div className="ml-10 mb-3 absolute bottom-4 left-4 text-xs text-gray-400 opacity-70 space-y-1">
-        <div>Ctrl+\: Focus input box</div>
-        <div>Ctrl+Enter: Send message</div>
-        <div>Ctrl+;: Toggle screenshot</div>
-        <div>Ctrl+N: New chat</div>
-        <div>Arrow keys: Move window</div>
-      </div>
+    <div className="h-screen w-screen text-white relative" style={{ background: 'transparent' }}>
+      {/* Always visible Dynamic Island */}
+      <DynamicIsland
+        onNewChat={() => togglePage('chat')}
+        onShowSettings={() => togglePage('settings')}
+        onShowHistory={() => togglePage('history')}
+        onClose={closePage}
+        currentPage={currentPage}
+        isPageVisible={isPageVisible}
+      />
       
-      <Suspense fallback={<div className="text-xl font-semibold text-yellow-400">Loading...</div>}>
-      {renderPage()}
+      {/* Conditional Page Overlays */}
+      <Suspense fallback={null}>
+        {renderPage()}
       </Suspense>
     </div>
   );

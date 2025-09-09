@@ -2,12 +2,13 @@ import React, { useState, FormEvent, useRef, useEffect, useMemo, useCallback } f
 import 'regenerator-runtime/runtime'
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition'
 import { Page } from '../App'
-import MessageBubble from './MessageBubble' 
+import MessageBubble from './MessageBubble'
 
 interface ChatPageProps {
   navigate: (page: Page, chatId?: string | null) => void
   chatId: string | null
   setChatId: (id: string | null) => void
+  onClose?: () => void
 }
 
 export interface Message { 
@@ -22,7 +23,7 @@ interface GeminiHistoryEntry {
   parts: [{ text: string }]
 }
 
-const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
+const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId, onClose }) => {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -244,55 +245,62 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
   }
 
   return (
-    <div className="w-full h-full flex flex-col rounded-xl shadow-2xl bg-gray-900/80 border border-gray-600">
-      <div className="draggable flex-shrink-0 p-3 flex justify-between items-center border-b border-gray-600">
-        <button
-          onClick={() => navigate('history')}
-          className="non-draggable text-gray-300 hover:text-white transition-colors"
-        >
-          &larr; History
-        </button>
-        <h2 className="text-lg font-semibold text-white">Nexus AI</h2>
-        <button
-          onClick={startNewChat}
-          className="non-draggable text-gray-300 hover:text-white transition-colors"
-        >
-          New Chat
-        </button>
-      </div>
+    <div className="w-full h-full flex flex-col p-4">
 
-      <div className="flex-grow p-4 overflow-y-auto custom-scrollbar">
-        {messages.map((msg, index) => (
-          <MessageBubble key={index} message={msg} />
-        ))}
-
-        {isLoading && (
-          <div className="mb-4 animate-fade-in-up flex items-start">
-            <div
-              className={`bg-gray-800 inline-flex items-center p-4 rounded-3xl rounded-bl-lg mt-1`}
-            >
-              <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse [animation-delay:-0.3s]"></span>
-              <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse [animation-delay:-0.15s] mx-1"></span>
-              <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
+      {/* Main Chat Area */}
+      <div className="flex-1 min-h-0 flex flex-col">
+        {/* Messages Container */}
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-4 py-6 rounded-2xl bg-black/20 backdrop-blur-sm border border-white/10 custom-scrollbar">
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-blue-400">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-white/90 mb-2">Start a conversation</h3>
+              <p className="text-sm text-white/60 max-w-md">
+                Ask me anything! I can help with coding, writing, analysis, or just have a friendly chat.
+              </p>
+              <div className="mt-4 text-xs text-white/40">
+                Press Ctrl+\ to focus, then start typing...
+              </div>
             </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
+          ) : (
+            messages.map((msg, index) => (
+              <MessageBubble key={index} message={msg} />
+            ))
+          )}
+
+          {isLoading && (
+            <div className="mb-4 animate-fade-in-up flex items-start">
+              <div className="bg-white/10 backdrop-blur-sm inline-flex items-center p-4 rounded-2xl border border-white/10">
+                <span className="h-2 w-2 bg-blue-400 rounded-full animate-pulse [animation-delay:-0.3s]"></span>
+                <span className="h-2 w-2 bg-blue-400 rounded-full animate-pulse [animation-delay:-0.15s] mx-1"></span>
+                <span className="h-2 w-2 bg-blue-400 rounded-full animate-pulse"></span>
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex-shrink-0 p-4 border-t border-white/10">
-        <div className="mb-7 relative flex items-end p-2 bg-gray-900 rounded-2xl border border-gray-700 focus-within:border-indigo-500 transition-colors">
-          <button
-            type="button"
-            onClick={toggleAudioMode}
-            disabled={isLoading}
-            className={`non-draggable p-2 rounded-full transition-all duration-300 self-center ${
-              isAudioMode
-                ? 'bg-red-500 text-white shadow-lg scale-110'
-                : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-            }`}
-            title={isAudioMode ? 'Exit Audio Mode' : 'Enter Audio Mode'}
-          >
+      {/* Enhanced Input Area */}
+      <div className="flex-shrink-0 pt-4">
+        <form onSubmit={handleSubmit} className="relative">
+          <div className="relative flex items-end p-4 bg-black/40 backdrop-blur-xl rounded-3xl border border-white/20 focus-within:border-blue-400/60 focus-within:shadow-lg focus-within:shadow-blue-500/20 transition-all duration-300">
+            {/* Audio Mode Button */}
+            <button
+              type="button"
+              onClick={toggleAudioMode}
+              disabled={isLoading}
+              className={`p-3 rounded-full transition-all duration-300 self-center ${
+                isAudioMode
+                  ? 'bg-red-500 text-white shadow-lg shadow-red-500/30 scale-110'
+                  : 'bg-white/10 hover:bg-white/20 text-white/70 hover:text-white'
+              }`}
+              title={isAudioMode ? 'Exit Audio Mode' : 'Enter Audio Mode'}
+            >
             {isAudioMode && listening && (
               <div className="absolute inset-0 rounded-full bg-red-400 animate-ping -z-10"></div>
             )}
@@ -319,12 +327,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
             className="hidden"
             accept="image/*,application/pdf"
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="non-draggable p-2 rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 transition-all duration-300 self-center ml-2"
-            title="Attach a file"
-          >
+            {/* File Attachment Button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-all duration-300 self-center ml-2"
+              title="Attach a file"
+            >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -341,22 +350,29 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
             </svg>
           </button>
 
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={isLoading || isAudioMode}
-            className="non-draggable autoresize-textarea w-full bg-transparent text-gray-200 text-base pl-3 pr-10 pb-2 focus:outline-none disabled:opacity-50 max-h-40"
-            placeholder={isAudioMode ? 'Listening...' : 'Type or speak... (AI will take screenshots automatically when needed)'}
-            rows={1}
-          />
+            {/* Main Input Textarea */}
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isLoading || isAudioMode}
+              className="flex-1 bg-transparent text-white text-base px-4 py-2 focus:outline-none disabled:opacity-50 resize-none min-h-[44px] max-h-32"
+              placeholder={isAudioMode ? 'Listening...' : 'Ask me anything...'}
+              rows={1}
+            />
 
-          <button
-            type="submit"
-            disabled={isLoading || (!input.trim() && !attachedFile)}
-            className="non-draggable p-2 text-gray-400 hover:text-indigo-500 disabled:opacity-50 disabled:hover:text-gray-400 transition-colors self-center"
-          >
+            {/* Send Button */}
+            <button
+              type="submit"
+              disabled={isLoading || (!input.trim() && !attachedFile)}
+              className={`p-3 rounded-full transition-all duration-300 self-center ml-2 ${
+                (!input.trim() && !attachedFile) || isLoading
+                  ? 'bg-white/5 text-white/30 cursor-not-allowed'
+                  : 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/30 hover:scale-105'
+              }`}
+              title="Send Message (Enter)"
+            >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -372,22 +388,34 @@ const ChatPage: React.FC<ChatPageProps> = ({ navigate, chatId, setChatId }) => {
               />
             </svg>
           </button>
-        </div>
-        <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
-          <div className="flex items-center">
-            <div className={`w-2 h-2 rounded-full mr-2 transition-colors ${isAudioMode && listening ? 'bg-red-500 animate-pulse' : 'bg-gray-600'}`}></div>
           </div>
-        </div>
-
-        <div className="flex items-center justify-end mt-1 space-x-4 h-5">
+          
+          {/* File Attachment Indicator */}
           {attachedFile && (
-            <div className="text-xs text-gray-400 flex items-center bg-gray-800 px-2 py-1 rounded-md">
+            <div className="absolute -top-12 left-4 text-xs text-white/80 flex items-center bg-white/10 backdrop-blur-sm px-3 py-2 rounded-xl border border-white/20">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.122 2.122l7.81-7.81" />
+              </svg>
               <span>{attachedFile.name}</span>
-              <button type="button" onClick={() => setAttachedFile(null)} className="ml-2 text-red-500 hover:text-red-400">&times;</button>
+              <button 
+                type="button" 
+                onClick={() => setAttachedFile(null)} 
+                className="ml-2 text-red-400 hover:text-red-300 text-lg leading-none"
+              >
+                ×
+              </button>
             </div>
           )}
-        </div>
-      </form>
+          
+          {/* Audio Mode Indicator */}
+          {isAudioMode && listening && (
+            <div className="absolute -top-12 right-4 text-xs text-white/80 flex items-center bg-red-500/20 backdrop-blur-sm px-3 py-2 rounded-xl border border-red-500/30">
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-2"></div>
+              <span>Listening...</span>
+            </div>
+          )}
+        </form>
+      </div>
     </div>
   )
 }
