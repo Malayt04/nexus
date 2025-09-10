@@ -3,6 +3,24 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('electronAPI', {
   invokeAI: (prompt: string, history: any[], file?: { path: string }) =>
     ipcRenderer.invoke('invoke-ai', prompt, history, file),
+  invokeAIStream: (
+    requestId: string,
+    prompt: string,
+    history: any[],
+    file?: { path: string }
+  ) => ipcRenderer.invoke('invoke-ai-stream', requestId, prompt, history, file),
+  onAIStreamChunk: (callback: (event: any, data: { requestId: string; text: string }) => void) => {
+    ipcRenderer.on('ai-stream-chunk', callback);
+    return () => ipcRenderer.removeListener('ai-stream-chunk', callback);
+  },
+  onAIStreamEnd: (callback: (event: any, data: { requestId: string; finalText: string }) => void) => {
+    ipcRenderer.on('ai-stream-end', callback);
+    return () => ipcRenderer.removeListener('ai-stream-end', callback);
+  },
+  onAIStreamError: (callback: (event: any, data: { requestId: string; error: string }) => void) => {
+    ipcRenderer.on('ai-stream-error', callback);
+    return () => ipcRenderer.removeListener('ai-stream-error', callback);
+  },
   getApiKey: () => ipcRenderer.invoke('get-api-key'),
   setApiKey: (key: string) => ipcRenderer.invoke('set-api-key', key),
   getSerpApiKey: () => ipcRenderer.invoke('get-serpapi-key'),

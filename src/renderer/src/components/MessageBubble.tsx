@@ -1,8 +1,8 @@
-import React from 'react';
-import MarkdownRenderer from './MarkdownRenderer';
+import React from "react";
+import MarkdownRenderer from "./MarkdownRenderer";
 
 interface Message {
-  sender: 'user' | 'ai';
+  sender: "user" | "ai";
   text: string;
   file?: { name: string; path: string };
 }
@@ -15,14 +15,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   return (
     <div
       className={`mb-4 flex flex-col animate-fade-in-up ${
-        message.sender === 'user' ? 'items-end' : 'items-start'
+        message.sender === "user" ? "items-end" : "items-start"
       }`}
     >
       <div
         className={`max-w-[85%] inline-block p-4 rounded-3xl text-left shadow-md ${
-          message.sender === 'user'
-            ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-br-lg'
-            : 'bg-gray-800 text-gray-200 rounded-bl-lg'
+          message.sender === "user"
+            ? "bg-black/60 text-white rounded-br-lg border border-white/10"
+            : "bg-black/40 text-gray-200 rounded-bl-lg border border-white/10"
         }`}
       >
         <MarkdownRenderer text={message.text} />
